@@ -1,11 +1,11 @@
 {
-    "Security": [
+    "SECURITY": [
         "TICKER",
         "SECTOR",
         "COUNTRY",
         "FX"
     ],
-    "Transaction": [
+    "TRANSACTION": [
         "PORTFOLIO_ID",
         "TICKER",
         "PRICE",
@@ -13,7 +13,7 @@
         "AMOUNT",
         "DATE"
     ],
-    "Dividend": [
+    "DIVIDEND": [
         "PORTFOLIO_ID",
         "TICKER",
         "AMOUNT",

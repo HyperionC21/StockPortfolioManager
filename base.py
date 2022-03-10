@@ -30,7 +30,41 @@ class BaseDBConnector:
         '''
 
         return pd.read_sql(query, self._conn)
+    
+    def read_query(self, query):
+        return pd.read_sql(query, self._conn)
+
+
 
 class TableHandler:
-    def __init__(self, db_connector, table_name, db_config) -> None:
-        pass
+    def __init__(self, db_connector, table_name, pk, db_config) -> None:
+        self._db_connector = db_connector
+        self._pk = pk
+        self.table_name = table_name
+        self.table_fields = set(db_config[table_name])
+    
+    def get_val(self, pk_val):
+        try:
+            query = f'''
+                SELECT * FROM {self.table_name} WHERE {self._pk} = '{pk_val}'
+            '''
+
+            row = self._db_connector.read_query(query)
+
+            return row
+        except:
+            raise Exception('Failed to get value')
+    
+    def insert_val(self, data : dict):
+        data_cols = set(data.keys())
+        assert set(data_cols) == self.table_fields
+
+        for k in data.keys():
+            data[k] = list(data[k])
+        df = pd.DataFrame.from_dict(data)
+
+        self._db_connector.insert_data(df, self.table_name)
+    
+    def load_csv(self, f_path):
+        data = pd.read_csv(f_path).to_dict(orient='columns')
+        self.insert_val(data)
