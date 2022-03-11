@@ -57,7 +57,7 @@ class TableHandler:
     
     def insert_val(self, data : dict):
         data_cols = set(data.keys())
-        assert set(data_cols) == self.table_fields
+        assert set(data_cols) == self.table_fields, set(data_cols).difference(self.table_fields)
 
         for k in data.keys():
             data[k] = list(data[k])
@@ -66,5 +66,22 @@ class TableHandler:
         self._db_connector.insert_data(df, self.table_name)
     
     def load_csv(self, f_path):
-        data = pd.read_csv(f_path).to_dict(orient='columns')
+        data = pd.read_csv(f_path).to_dict(orient='list')
         self.insert_val(data)
+
+
+class Reporter:
+    def __init__(self, db_model, conn):
+        self._conn = conn
+        self._db_model = db_model
+    
+    def get_report(self, ref_date):
+        raise NotImplementedError()
+
+
+class PortfolioCompositionReporter(Reporter):
+    def __init__(self, portfolio_id, db_model, conn):
+        super().__init__(db_model, conn)
+    
+    def get_report(self, ref_date):
+        query =
