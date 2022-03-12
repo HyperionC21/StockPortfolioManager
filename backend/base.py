@@ -70,18 +70,5 @@ class TableHandler:
         self.insert_val(data)
 
 
-class Reporter:
-    def __init__(self, db_model, conn):
-        self._conn = conn
-        self._db_model = db_model
-    
-    def get_report(self, ref_date):
-        raise NotImplementedError()
 
 
-class PortfolioCompositionReporter(Reporter):
-    def __init__(self, portfolio_id, db_model, conn):
-        super().__init__(db_model, conn)
-    
-    def get_report(self, ref_date):
-        query =
