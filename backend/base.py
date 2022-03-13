@@ -37,12 +37,20 @@ class BaseDBConnector:
 
 
 class TableHandler:
-    def __init__(self, db_connector, table_name, pk, db_config) -> None:
+    def __init__(self, db_connector, table_name, pk) -> None:
         self._db_connector = db_connector
         self._pk = pk
         self.table_name = table_name
-        self.table_fields = set(db_config[table_name])
-    
+        
+        query = f'''
+            SELECT * FROM '{table_name}' WHERE 1 = 3
+        '''
+
+        df = self._db_connector.read_query(query)
+
+        self.table_fields = list(df.columns)
+
+
     def get_val(self, pk_val):
         try:
             query = f'''
@@ -57,10 +65,7 @@ class TableHandler:
     
     def insert_val(self, data : dict):
         data_cols = set(data.keys())
-        assert set(data_cols) == self.table_fields, set(data_cols).difference(self.table_fields)
 
-        for k in data.keys():
-            data[k] = list(data[k])
         df = pd.DataFrame.from_dict(data)
 
         self._db_connector.insert_data(df, self.table_name)
