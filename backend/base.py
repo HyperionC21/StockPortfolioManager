@@ -1,6 +1,7 @@
 import pandas as pd
 import sqlite3
 import pandas as pd
+import yfinance as yf
 
 
 class BaseDBConnector:
@@ -73,6 +74,27 @@ class TableHandler:
     def load_csv(self, f_path):
         data = pd.read_csv(f_path).to_dict(orient='list')
         self.insert_val(data)
+
+class DataFetcher:
+    def __init__(self, db_conn):
+        self.db_conn = db_conn
+    
+    def fetch_missing_hist(self, ref_date):
+        query_fst_trans_per_ticker = '''
+            SELECT
+                TICKER,
+                MIN(DATE(t1.DATE)) as "FST_BUY_DT"
+            FROM
+                'TRANSACTION' t1
+            GROUP BY
+                t1.TICKER
+        '''
+
+        fst_trans = self.db_conn.read_query(query_fst_trans_per_ticker)
+
+
+
+        return fst_trans
 
 
 

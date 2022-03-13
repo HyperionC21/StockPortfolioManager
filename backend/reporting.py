@@ -1,8 +1,6 @@
-import base
-
 
 class Reporter:
-    def __init__(self, db_model, connector):
+    def __init__(self, connector):
         self._db_connector = connector
         self._db_model = db_model
 
