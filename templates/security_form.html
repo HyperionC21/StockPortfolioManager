@@ -1,6 +1,6 @@
   <html>
   <head>
-    <title>Educational registration form</title>
+    <title>Security form</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css" integrity="sha384-5sAR7xN1Nv6T6+dT2mhtzEpVJvfS3NScPQTrOxhwjIuvcA67KV2R5Jz6kr4abQsz" crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700" rel="stylesheet">
     <style>
@@ -121,16 +121,12 @@
   </head>
   <body>
     <div class="main-block">
-      <form action="/">
-        <div class="title">
-          <i class="fas fa-pencil-alt"></i> 
-          <h2>Register here</h2>
-        </div>
+      <form action="/security">
         <div class="info">
-          <input class="ticker" type="text" name="ticker" placeholder="TICKER">
-          <input type="text" name="sector" placeholder="SECTOR">
-          <input type="text" name="country" placeholder="COUNTRY">
-          <input type="text" name="fx" placeholder="FX">
+          <input class="ticker" type="text" name="TICKER" placeholder="TICKER">
+          <input type="text" name="SECTOR" placeholder="SECTOR">
+          <input type="text" name="COUNTRY" placeholder="COUNTRY">
+          <input type="text" name="FX" placeholder="FX">
           <select>
             <option value="security-type" selected>Security Type</option>
             <option value="stock">Stock</option>
@@ -138,7 +134,7 @@
             <option value="crypto">Crypto</option>
           </select>
         </div>
-        <button type="submit" href="/">Submit</button>
+        <button type="submit" >Submit</button>
       </form>
     </div>
   </body>
