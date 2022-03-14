@@ -2,7 +2,7 @@ import pandas as pd
 import sqlite3
 import pandas as pd
 import yfinance as yf
-
+from datetime import datetime
 
 class BaseDBConnector:
     def __init__(self, db_path):
@@ -80,9 +80,10 @@ class DataFetcher:
         self.db_conn = db_conn
     
     def fetch_missing_hist(self, ref_date):
+        
         query_fst_trans_per_ticker = '''
             SELECT
-                TICKER,
+                t1.TICKER,
                 MIN(DATE(t1.DATE)) as "FST_BUY_DT"
             FROM
                 'TRANSACTION' t1
@@ -90,12 +91,50 @@ class DataFetcher:
                 t1.TICKER
         '''
 
-        fst_trans = self.db_conn.read_query(query_fst_trans_per_ticker)
+        fst_dt = self.db_conn.read_query(query_fst_trans_per_ticker)
 
+        query_lst_data_per_ticker = '''
+            SELECT
+                t1.TICKER,
+                MAX(DATE(t1.DATE)) as "MAX_STORED_DT"
+            FROM
+                'SECURITY_VALUES' t1
+            GROUP BY
+                t1.TICKER
+        '''
 
+        lst_dt = self.db_conn.read_query(query_lst_data_per_ticker)
 
-        return fst_trans
+        df_ticker_fetch = pd.merge(fst_dt, lst_dt, on='TICKER', how='left')
+ 
+        df_ticker_fetch = df_ticker_fetch.fillna('3000-01-01')
 
+        def get_min_date(dt1, dt2):
+            dt1 = datetime.strptime(dt1, r'%Y-%m-%d')
+            dt2 = datetime.strptime(dt2, r'%Y-%m-%d')
 
+            return min(dt1, dt2)
 
+        df_ticker_fetch['START_DT'] = df_ticker_fetch.apply(lambda x: get_min_date(x['FST_BUY_DT'], x['MAX_STORED_DT']), axis=1)
+        df_ticker_fetch['END_DT'] = ref_date
 
+        df_ticker_fetch['START_DT'] = df_ticker_fetch['START_DT'].apply(lambda x: x.strftime(r'%Y-%m-%d'))
+
+        hists = []
+        for _, row in df_ticker_fetch.iterrows():
+            try:
+                ticker = yf.Ticker(row['TICKER'])
+                hist = ticker.history(start=row['START_DT'], end=row['END_DT']).reset_index()
+                hist['TICKER'] = row['TICKER']
+                hists.append(hist)
+            except Exception as e:
+                print(e)
+                print(f'Ticker {row["TICKER"]} not found on yahoo finance')
+
+        hist = pd.concat(hists, axis=0)
+        hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
+        hist.columns = list(map(lambda x: x.upper(), hist.columns))	
+
+        self.db_conn.insert_data(hist, 'SECURITY_VALUES')
+
+        return hist
