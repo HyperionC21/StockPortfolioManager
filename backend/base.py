@@ -79,52 +79,129 @@ class DataFetcher:
     def __init__(self, db_conn):
         self.db_conn = db_conn
     
-    def fetch_missing_hist(self, ref_date):
-        
-        query_fst_trans_per_ticker = '''
+    def fetch_ticker_prices(self, tickers, ref_date):
+        query = f'''
+            SELECT
+                t1.TICKER,
+                t1.CLOSE as PRICE 
+            FROM
+                `SECURITY_VALUES` as t1
+            INNER JOIN
+            (
+                SELECT
+                    TICKER,
+                    MAX(DATE(DATE)) as "DATE"
+                FROM
+                    `SECURITY_VALUES`
+                WHERE
+                    DATE(DATE) <= DATE('{ref_date}')
+                GROUP BY
+                    TICKER
+            ) t2
+            ON t1.TICKER = t2.TICKER AND DATE(t1.DATE) = DATE(t2.DATE)
+            WHERE
+                1 = 1
+                AND t1.TICKER IN ({",".join(tickers)}) '''
+
+        ticker_prices = self.db_conn.read_query(query)
+
+        return ticker_prices
+
+    def fetch_fx_val(self, fxs, ref_date):
+        query = f'''
+            SELECT
+                CURRENCY_CD,
+                VALUE
+            FROM
+            (
+                SELECT
+                    t1.CURRENCY_CD,
+                    t1.VALUE,
+                    t1.DATE,
+                    RANK() OVER (PARTITION BY t1.CURRENCY_CD ORDER BY t1.DATE DESC) as RNK
+                FROM
+                    FX t1
+                WHERE
+                    1 = 1
+            )
+            WHERE
+                1 = 1
+                AND RNK = 1
+            '''
+        return self.db_conn.read_query(query)
+
+    def fetch_ticker_fx(self, tickers, ref_date):
+        pass
+
+    def fetch_fst_trans_date_per_ticker(self):
+        query = f'''
             SELECT
                 t1.TICKER,
                 MIN(DATE(t1.DATE)) as "FST_BUY_DT"
             FROM
                 'TRANSACTION' t1
+            WHERE
+                1 = 1
             GROUP BY
                 t1.TICKER
         '''
 
-        fst_dt = self.db_conn.read_query(query_fst_trans_per_ticker)
+        fst_dt = self.db_conn.read_query(query)
 
-        query_lst_data_per_ticker = '''
+        return fst_dt 
+    
+    def fetch_fst_trans(self):
+        query = f'''
             SELECT
-                t1.TICKER,
-                MAX(DATE(t1.DATE)) as "MAX_STORED_DT"
+                MIN(DATE(t1.DATE)) as "FST_BUY_DT"
             FROM
-                'SECURITY_VALUES' t1
-            GROUP BY
-                t1.TICKER
+                'TRANSACTION' t1
         '''
 
-        lst_dt = self.db_conn.read_query(query_lst_data_per_ticker)
+        fst_dt = self.db_conn.read_query(query)
 
-        df_ticker_fetch = pd.merge(fst_dt, lst_dt, on='TICKER', how='left')
- 
-        df_ticker_fetch = df_ticker_fetch.fillna('3000-01-01')
+        return fst_dt
 
-        def get_min_date(dt1, dt2):
-            dt1 = datetime.strptime(dt1, r'%Y-%m-%d')
-            dt2 = datetime.strptime(dt2, r'%Y-%m-%d')
+    def fetch_currencies(self):
+        query = f'''
+            SELECT
+                FX,
+                CURRENCY_CD 
+            FROM
+                `FX_CD`
+            WHERE
+                1 = 1
+                AND FX <> '#NA'
+        '''
 
-            return min(dt1, dt2)
+        currencies = self.db_conn.read_query(query)
 
-        df_ticker_fetch['START_DT'] = df_ticker_fetch.apply(lambda x: get_min_date(x['FST_BUY_DT'], x['MAX_STORED_DT']), axis=1)
-        df_ticker_fetch['END_DT'] = ref_date
+        return currencies
 
-        df_ticker_fetch['START_DT'] = df_ticker_fetch['START_DT'].apply(lambda x: x.strftime(r'%Y-%m-%d'))
+    def fetch_all_transacted_tickers(self):
+        query = f'''
+            SELECT DISTINCT 
+                t1.TICKER
+            FROM `TRANSACTION` as t1
+            INNER JOIN `SECURITY` as t2 ON t1.TICKER = t2.TICKER
+            WHERE
+                1 = 1
+                AND t2.SRC <> 'MANUAL'
+        '''
+
+        tickers = self.db_conn.read_query(query)
+
+        return tickers
+
+    def fetch_ticker_hist(self, start_date, end_date):
+        
+        df_tickers = self.fetch_all_transacted_tickers()
 
         hists = []
-        for _, row in df_ticker_fetch.iterrows():
+        for _, row in df_tickers.iterrows():
             try:
                 ticker = yf.Ticker(row['TICKER'])
-                hist = ticker.history(start=row['START_DT'], end=row['END_DT']).reset_index()
+                hist = ticker.history(start=start_date, end=end_date).reset_index()
                 hist['TICKER'] = row['TICKER']
                 hists.append(hist)
             except Exception as e:
@@ -138,3 +215,40 @@ class DataFetcher:
         self.db_conn.insert_data(hist, 'SECURITY_VALUES')
 
         return hist
+
+    def fetch_fx(self, start_date, end_date):
+
+        currencies = self.fetch_currencies()
+
+        for _, row in currencies.iterrows():
+            ticker = yf.Ticker(row['CURRENCY_CD'])
+            curr_hist = ticker.history(start=start_date, end=end_date).reset_index()
+            curr_hist.columns = list(map(lambda x: x.upper(), curr_hist.columns))	
+
+            curr_hist = curr_hist[['CLOSE', 'DATE']]
+            curr_hist.rename(columns={
+                'CLOSE' : 'VALUE'
+            }, inplace=True)
+            curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
+
+            self.db_conn.insert_data(curr_hist, 'FX')
+
+    def fetch_portfolio_composition(self, portfolio_id : int, ref_date : str):
+        query = f'''
+            SELECT
+                t1.TICKER,
+                SUM(t1.AMOUNT) as N_SHARES,
+                '{ref_date}' as DT
+            FROM
+                'TRANSACTION' as t1
+            WHERE
+                1 = 1
+                AND t1.PORTFOLIO_ID = {portfolio_id}
+                AND DATE(t1.DATE) < DATE('{ref_date}')
+            GROUP BY
+                t1.TICKER 
+        '''
+
+        df = self.db_conn.read_query(query)
+        
+        return df
