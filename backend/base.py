@@ -78,7 +78,19 @@ class TableHandler:
 class DataFetcher:
     def __init__(self, db_conn):
         self.db_conn = db_conn
-    
+
+    def fetch_all_transacted_tickers(self):
+        query = f'''
+            SELECT DISTINCT 
+                t1.TICKER
+            FROM `SECURITY` t1
+            WHERE
+                1 = 1
+                AND t1.SRC <> 'MANUAL'
+        '''
+
+        return self.db_conn.read_query(query)
+
     def fetch_ticker_prices(self, tickers, ref_date):
         query = f'''
             SELECT
@@ -107,7 +119,7 @@ class DataFetcher:
 
         return ticker_prices
 
-    def fetch_fx_val(self, fxs, ref_date):
+    def fetch_fx_val(self, ref_date):
         query = f'''
             SELECT
                 CURRENCY_CD,
@@ -123,6 +135,7 @@ class DataFetcher:
                     FX t1
                 WHERE
                     1 = 1
+                    AND DATE(t1.DATE) <= DATE('{ref_date}')
             )
             WHERE
                 1 = 1
@@ -130,8 +143,31 @@ class DataFetcher:
             '''
         return self.db_conn.read_query(query)
 
-    def fetch_ticker_fx(self, tickers, ref_date):
-        pass
+    def fetch_ticker_fx(self, ref_date):
+        tickers = self.fetch_all_transacted_tickers()
+        fx_vals = self.fetch_fx_val(ref_date)
+
+        tickers = list(map(lambda x: f"'{x}'", tickers['TICKER']))
+
+        query = f'''
+            SELECT
+            t1.TICKER,
+            t2.CURRENCY_CD
+        FROM
+            SECURITY t1
+        LEFT JOIN
+            FX_CD t2 ON t1.FX = t2.FX
+        WHERE
+            1 = 1
+            AND t1.TICKER IN ({','.join(tickers)})
+        '''
+
+        tickers_fx = self.db_conn.read_query(query)
+
+        tickers_fx = pd.merge(tickers_fx, fx_vals, on='CURRENCY_CD', how='inner')
+
+        tickers_fx = tickers_fx[['TICKER', 'VALUE']]
+        return tickers_fx
 
     def fetch_fst_trans_date_per_ticker(self):
         query = f'''
@@ -178,21 +214,6 @@ class DataFetcher:
 
         return currencies
 
-    def fetch_all_transacted_tickers(self):
-        query = f'''
-            SELECT DISTINCT 
-                t1.TICKER
-            FROM `TRANSACTION` as t1
-            INNER JOIN `SECURITY` as t2 ON t1.TICKER = t2.TICKER
-            WHERE
-                1 = 1
-                AND t2.SRC <> 'MANUAL'
-        '''
-
-        tickers = self.db_conn.read_query(query)
-
-        return tickers
-
     def fetch_ticker_hist(self, start_date, end_date):
         
         df_tickers = self.fetch_all_transacted_tickers()
@@ -238,6 +259,7 @@ class DataFetcher:
             SELECT
                 t1.TICKER,
                 SUM(t1.AMOUNT) as N_SHARES,
+                SUM(t1.AMOUNT * t1.PRICE * t1.FX) as TOTAL_COST,
                 '{ref_date}' as DT
             FROM
                 'TRANSACTION' as t1
