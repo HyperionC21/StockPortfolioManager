@@ -1,8 +1,11 @@
+from utils import utils
 import pandas as pd
 import sqlite3
 import pandas as pd
 import yfinance as yf
 from datetime import datetime
+import requests
+import bs4
 
 class BaseDBConnector:
     def __init__(self, db_path):
@@ -255,6 +258,7 @@ class DataFetcher:
             self.db_conn.insert_data(curr_hist, 'FX')
 
     def fetch_portfolio_composition(self, portfolio_id : int, ref_date : str):
+
         query = f'''
             SELECT
                 t1.TICKER,
@@ -274,3 +278,136 @@ class DataFetcher:
         df = self.db_conn.read_query(query)
         
         return df
+
+
+class DBUpdater(DataFetcher):
+    def __init__(self, db_conn):
+        super().__init__(db_conn)
+
+    def fetch_missing_fx(self, start_dt, end_dt):
+        query = f'''
+        SELECT
+            t1.CURRENCY_CD,
+            COALESCE(MAX(DATE(t2.DATE)), '{start_dt}') as FETCH_START_DT,
+            '{end_dt}' as FETCH_END_DT
+        FROM
+            FX_CD t1
+        LEFT JOIN
+            FX t2 ON t1.CURRENCY_CD = t2.CURRENCY_CD
+        GROUP BY
+            t2.CURRENCY_CD
+        '''
+
+        return self.db_conn.read_query(query)
+    
+    def fetch_missing_securities_yf(self, start_dt, end_dt):
+        query = f'''
+            SELECT
+            t1.TICKER,
+            COALESCE(DATE(DATETIME(MAX(DATE(t2.DATE)), '+1 day')), '{start_dt}') as FETCH_START_DT,
+            '{end_dt}' as FETCH_END_DT
+        FROM
+            SECURITY t1
+        LEFT JOIN
+            SECURITY_VALUES t2 ON t1.TICKER = t2.TICKER
+        WHERE
+            t1.SRC = 'YF'
+        GROUP BY
+            t1.TICKER
+        '''
+
+        
+        df_missing = self.db_conn.read_query(query)
+        
+
+        hists = []
+        for _, row in df_missing.iterrows():
+            try:
+                ticker = yf.Ticker(row['TICKER'])
+                hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
+                hist['TICKER'] = row['TICKER']
+                
+                ref_date = utils.str2date(row['FETCH_START_DT'])
+                hist = hist[hist.Date >= ref_date]
+
+                hists.append(hist)
+            except Exception as e:
+                print(e)
+                print(f'Ticker {row["TICKER"]} not found on yahoo finance')
+
+        hist = pd.concat(hists, axis=0)
+        hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
+        hist.columns = list(map(lambda x: x.upper(), hist.columns))	
+
+        try:
+            self.db_conn.insert_data(hist, 'SECURITY_VALUES')
+        except Exception as e:
+            print(e)
+
+        return hist
+
+    def fetch_missing_securities_bvb(self, start_dt, end_dt):
+        now_ = datetime.now()
+        
+        query = f'''
+            SELECT
+            t1.TICKER,
+            COALESCE(MAX(DATE(t2.DATE)), '{start_dt}') as FETCH_START_DT,
+            '{end_dt}' as FETCH_END_DT
+        FROM
+            SECURITY t1
+        LEFT JOIN
+            SECURITY_VALUES t2 ON t1.TICKER = t2.TICKER
+        WHERE
+            t1.SRC = 'BVB_API'
+        GROUP BY
+            t1.TICKER
+        '''
+
+
+        def get_last_price(ticker):
+            url = f'https://bvb.ro/FinancialInstruments/Details/FinancialInstrumentsDetails.aspx?s={ticker}'
+            req = requests.api.get(url)
+            page = bs4.BeautifulSoup(req.content, "html.parser")
+            job_elements = page.find_all("tr", class_="TD2")
+            last_price = None
+
+            for el_ in job_elements:
+                if "last" in el_.text.lower():
+                    elements =  el_.findAll("td")
+                    last_price = elements[-1].text
+                    break
+      
+            return last_price
+        
+
+
+        bvb_tickers = self.db_conn.read_query(query)
+
+        now_ = datetime.now().strftime(r'%Y-%m-%d')
+
+        def isValid(dt1, dt2):
+            return datetime.strptime(dt1, r'%Y-%m-%d') > datetime.strptime(dt2, r'%Y-%m-%d')
+
+        bvb_tickers['filter'] = bvb_tickers.apply(lambda x: isValid(now_, x['FETCH_START_DT']), axis=1)
+
+        bvb_tickers = bvb_tickers[bvb_tickers['filter'] == True]
+
+        bvb_tickers['CLOSE'] = bvb_tickers['TICKER'].apply(get_last_price)
+        bvb_tickers['DATE'] = now_
+
+        bvb_tickers['OPEN'] = bvb_tickers['CLOSE'].values
+        bvb_tickers['HIGH'] = bvb_tickers['CLOSE'].values
+        bvb_tickers['LOW'] = bvb_tickers['CLOSE'].values
+
+        bvb_tickers = bvb_tickers.drop(columns=['filter', 'FETCH_START_DT', 'FETCH_END_DT'])
+
+        if len(bvb_tickers) == 0:
+            return None
+        
+        print(bvb_tickers)
+        
+        table_handler = TableHandler(self.db_conn, 'SECURITY_VALUES', '')
+        table_handler.insert_val(bvb_tickers.to_dict(orient='list'))
+
+        return bvb_tickers
