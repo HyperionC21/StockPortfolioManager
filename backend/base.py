@@ -1,4 +1,5 @@
 from utils import utils
+
 import pandas as pd
 import sqlite3
 import pandas as pd
@@ -318,7 +319,6 @@ class DBUpdater(DataFetcher):
 
         
         df_missing = self.db_conn.read_query(query)
-        
 
         hists = []
         for _, row in df_missing.iterrows():
@@ -326,9 +326,10 @@ class DBUpdater(DataFetcher):
                 ticker = yf.Ticker(row['TICKER'])
                 hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
                 hist['TICKER'] = row['TICKER']
-                
+
                 ref_date = utils.str2date(row['FETCH_START_DT'])
                 hist = hist[hist.Date >= ref_date]
+
 
                 hists.append(hist)
             except Exception as e:
