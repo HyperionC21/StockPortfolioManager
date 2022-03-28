@@ -406,8 +406,6 @@ class DBUpdater(DataFetcher):
         if len(bvb_tickers) == 0:
             return None
         
-        print(bvb_tickers)
-        
         table_handler = TableHandler(self.db_conn, 'SECURITY_VALUES', '')
         table_handler.insert_val(bvb_tickers.to_dict(orient='list'))
 
