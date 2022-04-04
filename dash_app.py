@@ -1,4 +1,5 @@
 # backend
+from turtle import width
 import pandas as pd
 import numpy as np
 import json
@@ -16,6 +17,11 @@ import plotly.express as px
 app = Dash(__name__)
 
 def get_evolution(start_dt, end_dt):
+    db_connector = base.BaseDBConnector('core.db')
+    db_fetcher = base.DataFetcher(db_connector)
+    reporter = reporting.Reporter(db_fetcher)
+    ref_cost = reporter.get_portfolio_info(1, end_dt)['cost']
+
     df_evolution = pd.DataFrame()
     df_evolution['DT'] = list(utils.daterange(start_dt, end_dt))
     df_evolution['RETURN'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x, ref_cost=ref_cost)['profit_perc'])
@@ -23,7 +29,13 @@ def get_evolution(start_dt, end_dt):
 
     return df_evolution
 
-def get_composition(ref_date, ref_cost):
+def get_composition(ref_date):
+    db_connector = base.BaseDBConnector('core.db')
+    db_fetcher = base.DataFetcher(db_connector)
+    reporter = reporting.Reporter(db_fetcher)
+
+    ref_cost = reporter.get_portfolio_info(1, ref_date)['cost']
+
     df_composition = reporter.get_portfolio_info(1, ref_date, ref_cost=ref_cost)['df']
     df_composition['PROFIT'] = np.round(df_composition['VALUE'] - df_composition['TOTAL_COST'], 2)
     df_composition['PROFIT%'] = np.round(df_composition['PROFIT'] * 100 / df_composition['TOTAL_COST'], 2)
@@ -56,6 +68,36 @@ def get_form(fields, id_):
 
     return form_security
 
+def get_table(t_name):
+    db_connector = base.BaseDBConnector('core.db')
+
+    df = db_connector.read_table(t_name)
+
+    if 'DATE' in df.columns:
+        df = df.sort_values(by='DATE', ascending=False)
+    
+
+    table = dash_table.DataTable(df.to_dict('records'), 
+        [{"name": i, "id": i} for i in df.columns],
+        page_size=10,
+        filter_action="native",
+        sort_action="native",
+        sort_mode="multi",
+        style_table={
+        'overflowY': 'scroll'
+        }
+    )
+
+    return table
+
+def update_data():
+    db_connector = base.BaseDBConnector('core.db')
+    missing_data_getter = base.DBUpdater(db_conn=db_connector)
+    _ = missing_data_getter.fetch_missing_fx(START_DT, now_)
+    _ = missing_data_getter.fetch_missing_securities_yf(START_DT, now_)
+    _ = missing_data_getter.fetch_missing_securities_bvb(START_DT, now_)
+
+
 INPUT_FORM_FIELDS = {
     'security' : ['TICKER', 'SECTOR', 'COUNTRY', 'FX', 'MARKET', 'SRC'],
     'transaction' : ['TICKER', 'PRICE', 'FX', 'AMOUNT', 'DATE'],
@@ -63,58 +105,56 @@ INPUT_FORM_FIELDS = {
 }
 
 gl_form_name = 'security'
+START_DT = '2022-01-10'
+now_ = utils.date2str(datetime.now())
 
-if __name__ == '__main__':
-    
-    START_DT = '2022-01-10'
-    now_ = utils.date2str(datetime.now())
-
-    
-    db_connector = base.BaseDBConnector('core.db')
-    data_fetcher = base.DataFetcher(db_connector)
-    reporter = reporting.Reporter(data_fetcher)
-
-    # table handlers
-    
-    
-    
-
-    missing_data_getter = base.DBUpdater(db_conn=db_connector)
-    _ = missing_data_getter.fetch_missing_fx(START_DT, now_)
-    _ = missing_data_getter.fetch_missing_securities_yf(START_DT, now_)
-    _ = missing_data_getter.fetch_missing_securities_bvb(START_DT, now_)
-
-    ref_cost = reporter.get_portfolio_info(1, now_)['cost']
-
-    data = reporter.get_portfolio_info(1, now_, ref_cost=ref_cost)
-
-    df = data['df']
-
-    df_ev = get_evolution(START_DT, now_)
+def get_visual_data(start_dt, end_dt):
+    df_ev = get_evolution(start_dt, end_dt)
+    df_comp = get_composition(end_dt)
 
     fig_roi = px.line(df_ev, x='DT', y=['RETURN'])
-
-    df_comp = get_composition(now_, ref_cost)
-
     fig_value_pie = px.pie(df_comp, names='TICKER', values='VALUE', title='Portfolio value')
     fig_cost_pie = px.pie(df_comp, names='TICKER', values='TOTAL_COST', title='Portfolio invested')
 
     fig_profit_perc = px.bar(df_comp, x='TICKER', y='PROFIT%', color='TICKER', title='Percentage profit')
     fig_profit = px.bar(df_comp, x='TICKER', y='PROFIT', color='TICKER', title='Absolute profit')
+
+    return {
+        'ev' : df_ev,
+        'comp' : df_comp,
+        'fig_roi' : fig_roi,
+        'fig_v_pie' : fig_value_pie,
+        'fig_c_pie' : fig_cost_pie,
+        'fig_pr_perc' : fig_profit_perc,
+        'fig_pr' : fig_profit
+    }
+
+vis_data = get_visual_data(START_DT, now_)
+
+if __name__ == '__main__':
+    
+    
     
 
     roi_div = html.Div(
         id='page-1-content',
         children=[
-            dcc.Graph(figure=fig_roi),
             html.Div([
-                dcc.Graph(figure=fig_value_pie),
-                dcc.Graph(figure=fig_cost_pie)
+                dcc.Graph(figure=vis_data['fig_roi'], id='roi_graph_id'),
+                dcc.DatePickerRange(
+                    id='roi_range',
+                    min_date_allowed=utils.str2date(START_DT),
+                    max_date_allowed=utils.str2date(now_)
+                )],
+                style={'display': 'flex', 'flex-direction': 'column'}),
+            html.Div([
+                dcc.Graph(figure=vis_data['fig_v_pie']),
+                dcc.Graph(figure=vis_data['fig_c_pie'])
                 ], style={'display': 'flex', 'flex-direction': 'row'}
             ),
             
-            dcc.Graph(figure=fig_profit_perc),
-            dcc.Graph(figure=fig_profit)
+            dcc.Graph(figure=vis_data['fig_pr_perc']),
+            dcc.Graph(figure=vis_data['fig_pr'])
         ],
         style={'display': 'flex', 'flex-direction': 'column', 'width' : '1000'}
     )
@@ -136,16 +176,19 @@ if __name__ == '__main__':
 
     security_form = html.Div([
         get_form(INPUT_FORM_FIELDS['security'], 'security_id'),
+        get_table('SECURITY'),
         dcc.Link('Go back to home', href='/')
     ])
 
     transaction_form = html.Div([
         get_form(INPUT_FORM_FIELDS['transaction'], 'transaction_id'),
+        get_table('TRANSACTION'),
         dcc.Link('Go back to home', href='/')
     ])
 
     security_values_form = html.Div([
         get_form(INPUT_FORM_FIELDS['security_values'], 'security_values_id'),
+        get_table('SECURITY_VALUES'),
         dcc.Link('Go back to home', href='/')
     ])
 
@@ -203,6 +246,14 @@ if __name__ == '__main__':
 
         security_values_t_handler.insert_val(data)
         return flask.redirect('/')
+
+    @app.callback(
+        Output('roi_graph_id', 'figure'),
+        Input('roi_range', 'start_date'),
+        Input('roi_range', 'end_date'))
+    def update_output(start_date, end_date):
+        print('PULA')
+        return get_visual_data(start_date, end_date)['fig_roi']
 
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),

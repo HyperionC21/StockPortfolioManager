@@ -31,7 +31,7 @@ class BaseDBConnector:
 
     def read_table(self, table_name):
         query = f'''
-            SELECT * FROM {table_name}
+            SELECT * FROM `{table_name}`
         '''
 
         return pd.read_sql(query, self._conn)
