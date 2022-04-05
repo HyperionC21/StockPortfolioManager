@@ -20,12 +20,14 @@ def get_evolution(start_dt, end_dt):
     db_connector = base.BaseDBConnector('core.db')
     db_fetcher = base.DataFetcher(db_connector)
     reporter = reporting.Reporter(db_fetcher)
-    ref_cost = reporter.get_portfolio_info(1, end_dt)['cost']
+
+    ref_nav = reporter.get_portfolio_info(1, start_dt)['nav']
+
 
     df_evolution = pd.DataFrame()
     df_evolution['DT'] = list(utils.daterange(start_dt, end_dt))
-    df_evolution['RETURN'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x, ref_cost=ref_cost)['profit_perc'])
-    df_evolution['RETURN'] = df_evolution['RETURN'].apply(lambda x: np.round(x, 2))
+    df_evolution['NAV'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x)['nav'])
+    df_evolution['RETURN'] = (df_evolution['NAV'] - ref_nav) * 100 / ref_nav
 
     return df_evolution
 
@@ -39,13 +41,14 @@ def get_composition(ref_date):
     df_composition = reporter.get_portfolio_info(1, ref_date, ref_cost=ref_cost)['df']
     df_composition['PROFIT'] = np.round(df_composition['VALUE'] - df_composition['TOTAL_COST'], 2)
     df_composition['PROFIT%'] = np.round(df_composition['PROFIT'] * 100 / df_composition['TOTAL_COST'], 2)
+    df_composition['VALUE%'] = np.round(df_composition['VALUE'] * 100 / df_composition['VALUE'].sum(), 2)
 
     df_composition['FX'] = np.round(df_composition['FX'], 2)
 
     df_composition['TOTAL_COST'] = df_composition['TOTAL_COST'].astype(int)
     df_composition['PRICE'] = df_composition['PRICE'].apply(lambda x: np.round(x, 2))
-    df_composition['VALUE'] = df_composition['VALUE'].astype(int)
-    df_composition['PROFIT'] = df_composition['PROFIT'].astype(int)
+    
+
 
     df_composition = df_composition.sort_values(by='VALUE', ascending=False)
     return df_composition
@@ -112,12 +115,15 @@ def get_visual_data(start_dt, end_dt):
     df_ev = get_evolution(start_dt, end_dt)
     df_comp = get_composition(end_dt)
 
+    print(df_comp.head(20))
     fig_roi = px.line(df_ev, x='DT', y=['RETURN'])
     fig_value_pie = px.pie(df_comp, names='TICKER', values='VALUE', title='Portfolio value')
     fig_cost_pie = px.pie(df_comp, names='TICKER', values='TOTAL_COST', title='Portfolio invested')
 
-    fig_profit_perc = px.bar(df_comp, x='TICKER', y='PROFIT%', color='TICKER', title='Percentage profit')
-    fig_profit = px.bar(df_comp, x='TICKER', y='PROFIT', color='TICKER', title='Absolute profit')
+    fig_profit_perc = px.bar(df_comp.sort_values(by='PROFIT%', ascending=False), \
+        x='TICKER', y='PROFIT%', color='TICKER', title='Percentage profit')
+    fig_profit = px.bar(df_comp.sort_values(by='PROFIT', ascending=False), \
+        x='TICKER', y='PROFIT', color='TICKER', title='Absolute profit')
 
     return {
         'ev' : df_ev,
@@ -132,9 +138,7 @@ def get_visual_data(start_dt, end_dt):
 vis_data = get_visual_data(START_DT, now_)
 
 if __name__ == '__main__':
-    
-    
-    
+    update_data()
 
     roi_div = html.Div(
         id='page-1-content',
@@ -148,11 +152,15 @@ if __name__ == '__main__':
                 )],
                 style={'display': 'flex', 'flex-direction': 'column'}),
             html.Div([
-                dcc.Graph(figure=vis_data['fig_v_pie']),
-                dcc.Graph(figure=vis_data['fig_c_pie'])
+                dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id'),
+                dcc.Graph(figure=vis_data['fig_c_pie'], id='c_pie_id')
                 ], style={'display': 'flex', 'flex-direction': 'row'}
             ),
-            
+            html.Div(children=[
+                html.H1(f"PROFIT: {int(vis_data['comp']['PROFIT'].sum())}"),
+                html.H1(f"VALUE: {int(vis_data['comp']['VALUE'].sum())}"),
+                html.H1(f"INV: {int(vis_data['comp']['TOTAL_COST'].sum())}")
+            ], style={'display': 'flex', 'flex-direction': 'column'}),
             dcc.Graph(figure=vis_data['fig_pr_perc']),
             dcc.Graph(figure=vis_data['fig_pr'])
         ],
@@ -174,11 +182,14 @@ if __name__ == '__main__':
         dcc.Link('Go back to home', href='/'),
     ])
 
-    security_form = html.Div([
-        get_form(INPUT_FORM_FIELDS['security'], 'security_id'),
-        get_table('SECURITY'),
-        dcc.Link('Go back to home', href='/')
-    ])
+    def get_security_form():
+        return html.Div([
+            get_form(INPUT_FORM_FIELDS['security'], 'security_id'),
+            get_table('SECURITY'),
+            dcc.Link('Go back to home', href='/')
+        ])
+
+    security_form = get_security_form()
 
     transaction_form = html.Div([
         get_form(INPUT_FORM_FIELDS['transaction'], 'transaction_id'),
@@ -252,12 +263,29 @@ if __name__ == '__main__':
         Input('roi_range', 'start_date'),
         Input('roi_range', 'end_date'))
     def update_output(start_date, end_date):
-        print('PULA')
         return get_visual_data(start_date, end_date)['fig_roi']
 
-    app.layout = html.Div([
-        dcc.Location(id='url', refresh=False),
-        html.Div(id='page-content')
-    ])
+    @app.callback(
+        Output('v_pie_id', 'figure'),
+        Input('roi_range', 'start_date'),
+        Input('roi_range', 'end_date'))
+    def update_v_pie(start_date, end_date):
+        return get_visual_data(start_date, end_date)['fig_v_pie']
+    
+
+    @app.callback(
+        Output('c_pie_id', 'figure'),
+        Input('roi_range', 'start_date'),
+        Input('roi_range', 'end_date'))
+    def update_v_pie(start_date, end_date):
+        return get_visual_data(start_date, end_date)['fig_c_pie']
+
+    def serve_layout():
+        return html.Div([
+            dcc.Location(id='url', refresh=False),
+            html.Div(id='page-content')
+        ])
+
+    app.layout = serve_layout()
 
     app.run_server()
