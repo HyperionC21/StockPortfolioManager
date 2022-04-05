@@ -119,6 +119,7 @@ def get_visual_data(start_dt, end_dt):
     df_ev = get_evolution(start_dt, end_dt)
     df_comp = get_composition(end_dt)
 
+    print(df_comp.head(20))
     fig_roi = px.line(df_ev, x='DT', y=['RETURN'])
     fig_value_pie = px.pie(df_comp, names='TICKER', values='VALUE', title='Portfolio value')
     fig_cost_pie = px.pie(df_comp, names='TICKER', values='TOTAL_COST', title='Portfolio invested')
@@ -295,9 +296,31 @@ if __name__ == '__main__':
         Output('v_pie_id', 'figure'),
         Input('roi_range', 'start_date'),
         Input('roi_range', 'end_date'))
+    def update_output(start_date, end_date):
+        return get_visual_data(start_date, end_date)['fig_roi']
+
+    @app.callback(
+        Output('v_pie_id', 'figure'),
+        Input('roi_range', 'start_date'),
+        Input('roi_range', 'end_date'))
     def update_v_pie(start_date, end_date):
         return get_visual_data(start_date, end_date)['fig_v_pie']
+    
 
+    @app.callback(
+        Output('c_pie_id', 'figure'),
+        Input('roi_range', 'start_date'),
+        Input('roi_range', 'end_date'))
+    def update_v_pie(start_date, end_date):
+        return get_visual_data(start_date, end_date)['fig_c_pie']
+
+    def serve_layout():
+        return html.Div([
+            dcc.Location(id='url', refresh=False),
+            html.Div(id='page-content')
+        ])
+
+    app.layout = serve_layout()
 
     @app.callback(
         Output('c_pie_id', 'figure'),
