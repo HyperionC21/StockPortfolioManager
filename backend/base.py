@@ -39,8 +39,6 @@ class BaseDBConnector:
     def read_query(self, query):
         return pd.read_sql(query, self._conn)
 
-
-
 class TableHandler:
     def __init__(self, db_connector, table_name, pk) -> None:
         self._db_connector = db_connector
@@ -279,7 +277,6 @@ class DataFetcher:
         df = self.db_conn.read_query(query)
         
         return df
-
 
 class DBUpdater(DataFetcher):
     def __init__(self, db_conn):
