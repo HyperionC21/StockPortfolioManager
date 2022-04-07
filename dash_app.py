@@ -52,7 +52,7 @@ def get_composition(ref_date):
     df_composition['TOTAL_COST'] = df_composition['TOTAL_COST'].astype(int)
     df_composition['PRICE'] = df_composition['PRICE'].apply(lambda x: np.round(x, 2))
     
-
+    df_composition.loc[df_composition['VALUE%'] <= 1, 'TICKER'] = 'OTHER'
 
     df_composition = df_composition.sort_values(by='VALUE', ascending=False)
     return df_composition
@@ -119,11 +119,11 @@ def get_visual_data(start_dt, end_dt):
     df_ev = get_evolution(start_dt, end_dt)
     df_comp = get_composition(end_dt)
 
-    print(df_comp.head(20))
     fig_roi = px.line(df_ev, x='DT', y=['RETURN'])
     fig_value_pie = px.pie(df_comp, names='TICKER', values='VALUE', title='Portfolio value')
     fig_cost_pie = px.pie(df_comp, names='TICKER', values='TOTAL_COST', title='Portfolio invested')
 
+    df_comp = df_comp[df_comp['TICKER'] != 'OTHER']
     fig_profit_perc = px.bar(df_comp.sort_values(by='PROFIT%', ascending=False), \
         x='TICKER', y='PROFIT%', color='TICKER', title='Percentage profit')
     fig_profit = px.bar(df_comp.sort_values(by='PROFIT', ascending=False), \
@@ -149,67 +149,83 @@ if __name__ == '__main__':
         children=[
             html.Div([
                 dcc.Graph(figure=vis_data['fig_roi'], id='roi_graph_id'),
-                dcc.DatePickerRange(
+                dcc.Tabs([
+                    dcc.Tab(label='Interval Picker', children=[dcc.DatePickerRange(
                     id='roi_range',
                     min_date_allowed=utils.str2date(START_DT),
                     max_date_allowed=utils.str2date(now_)
-                ),
-                dcc.Dropdown(['ALLTIME', 'WTD', 'MTD', 'YTD'], 'ALLTIME', id='period_dropdown_id')],
+                    )]),
+                    dcc.Tab(label='Preset Picker', children=[dcc.Dropdown(['ALLTIME', 'WTD', 'MTD', 'YTD'], 'ALLTIME', id='period_dropdown_id')])
+                ])
+                ],
                 style={'display': 'flex', 'flex-direction': 'column'}),
-            html.Div([
-                dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id'),
-                dcc.Graph(figure=vis_data['fig_c_pie'], id='c_pie_id')
-                ], style={'display': 'flex', 'flex-direction': 'row'}
-            ),
-            html.Div(children=[
-                html.H1(f"PROFIT: {int(vis_data['comp']['PROFIT'].sum())}"),
-                html.H1(f"VALUE: {int(vis_data['comp']['VALUE'].sum())}"),
-                html.H1(f"INV: {int(vis_data['comp']['TOTAL_COST'].sum())}")
-            ], style={'display': 'flex', 'flex-direction': 'column'}),
-            dcc.Graph(figure=vis_data['fig_pr_perc']),
-            dcc.Graph(figure=vis_data['fig_pr'])
+            dcc.Tabs([
+                dcc.Tab(label='Value Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id')]),
+                dcc.Tab(label='Invested Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_c_pie'], id='c_pie_id')])
+            ]),
+            html.Br(),
+            dcc.Tabs([
+               dcc.Tab(label='PROFIT', children=[html.H1(int(vis_data['comp']['PROFIT'].sum()))]),
+               dcc.Tab(label='VALUE', children=[html.H1(int(vis_data['comp']['VALUE'].sum()))]),
+               dcc.Tab(label='INV', children=[html.H1(int(vis_data['comp']['TOTAL_COST'].sum()))]) 
+            ]),
+            html.Br(),
+            dcc.Tabs([
+                dcc.Tab(label="Profit Percentage", children=[dcc.Graph(figure=vis_data['fig_pr_perc'])]),
+                dcc.Tab(label="Profit Absolute", children=[dcc.Graph(figure=vis_data['fig_pr'])])
+            ])
         ],
         style={'display': 'flex', 'flex-direction': 'column', 'width' : '1000'}
     )
 
     index_page = html.Div([
-        dcc.Link('Go to statistics', href='/page-1'),
+        dcc.Link(html.Button("STATISTICS"), href='/statistics'),
         html.Br(),
-        dcc.Link('Go to security', href='/security_id'),
+        dcc.Link(html.Button("SECURITY FORM"), href='/security_id'),
         html.Br(),
-        dcc.Link('Go to transactions', href='/transaction_id'),
+        dcc.Link(html.Button("TRANSACTION FORM"), href='/transaction_id'),
         html.Br(),
-        dcc.Link('Go to security values', href='/security_values_id'),
-    ])
+        dcc.Link(html.Button("SECURITY VALUES FORM"), href='/security_values_id'),
+    ], style={"width": "500px",
+        "margin": "auto",
+        "border": "3px", 
+        "solid" :  "#73AD21",
+        "top" : 0,
+        "bottom" : 0,
+        "left" : 0,
+        "right" : 0,
+        "font-family" : "Times New Roman",
+        "font-weight" : "bold",
+        "font-size" : "40px"})
 
     page_1_layout = html.Div([
         roi_div,
-        dcc.Link('Go back to home', href='/'),
+        dcc.Link(html.Button("HOME"), href='/'),
     ])
 
 
     security_form = html.Div([
             get_form(INPUT_FORM_FIELDS['security'], 'security_id'),
             get_table('SECURITY'),
-            dcc.Link('Go back to home', href='/')
+            dcc.Link(html.Button("HOME"), href='/')
     ])
 
     transaction_form = html.Div([
         get_form(INPUT_FORM_FIELDS['transaction'], 'transaction_id'),
         get_table('TRANSACTION'),
-        dcc.Link('Go back to home', href='/')
+        dcc.Link(html.Button("HOME"), href='/')
     ])
 
     security_values_form = html.Div([
         get_form(INPUT_FORM_FIELDS['security_values'], 'security_values_id'),
         get_table('SECURITY_VALUES'),
-        dcc.Link('Go back to home', href='/')
+        dcc.Link(html.Button("HOME"), href='/')
     ])
 
     @callback(Output('page-content', 'children'),
               [Input('url', 'pathname')])
     def display_page(pathname):
-        if pathname == '/page-1':
+        if pathname == '/statistics':
             return page_1_layout
         elif pathname == '/security_id':
             return security_form
