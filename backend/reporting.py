@@ -1,3 +1,4 @@
+from importlib_metadata import re
 import pandas as pd
 from .base import DataFetcher
 
@@ -5,8 +6,7 @@ class Reporter:
     def __init__(self, data_fecther):
         self._data_fetcher = data_fecther
 
-
-    def get_portfolio_info(self, portfolio_id, ref_date, ref_cost=None):
+    def get_comp(self, portfolio_id, ref_date):
         portfolio_composition = self._data_fetcher.fetch_portfolio_composition(portfolio_id, ref_date)
 
         tickers = list(map(lambda x: f"'{x}'", list(portfolio_composition['TICKER'])))
@@ -21,21 +21,28 @@ class Reporter:
         df_out['FX'] = df_out['FX'].fillna(1)
 
         df_out['VALUE'] = df_out['N_SHARES'] * df_out['PRICE'] * df_out['FX']
+
+        return df_out
+
+    def get_value_based_portf_distrib(self, portfolio_id, ref_date, hue=None):
+        df_out = self.get_comp(portfolio_id, ref_date)
+
+        if hue is None:
+            res = df_out.groupby('TICKER')['VALUE'].sum() / df_out['VALUE'].sum()
+            print(res)
+            res = res.to_dict()
+        elif hue == ''
         
-        nav_at_dt = df_out['VALUE'].sum()
-        cost_at_dt = df_out['TOTAL_COST'].sum()
+        return res
 
-        profit = nav_at_dt - cost_at_dt
+    def get_nav_cost(self, portfolio_id, ref_date):
+        df_out = self.get_comp(portfolio_id, ref_date)
 
-        if ref_cost is None:
-            ref_cost = cost_at_dt
-
-        profit_perc =  profit * 100 / ref_cost
-        nav = ref_cost + profit
+        nav = df_out['VALUE'].sum()
+        cost = df_out['TOTAL_COST'].sum()
 
         return {
             'nav' : nav,
-            'cost' : ref_cost,
-            'profit_perc' : profit_perc,
-            'df' : df_out
+            'cost' : cost
         }
+
