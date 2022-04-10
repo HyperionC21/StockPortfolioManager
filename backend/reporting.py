@@ -38,5 +38,6 @@ class Reporter:
             'nav' : nav,
             'cost' : ref_cost,
             'profit_perc' : profit_perc,
+            'profit' : profit,
             'df' : df_out
         }

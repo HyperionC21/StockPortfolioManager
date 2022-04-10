@@ -6,6 +6,7 @@ from turtle import width
 import pandas as pd
 import numpy as np
 import json
+import argparse
 
 from backend import base, reporting
 from utils import utils
@@ -20,23 +21,41 @@ import dash
 import plotly.express as px
 app = Dash(__name__)
 
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--db-path", type=str, help="Path for DB")
+
+args = parser.parse_args()
+
+
 def get_evolution(start_dt, end_dt):
-    db_connector = base.BaseDBConnector('core.db')
+    global args
+    db_connector = base.BaseDBConnector(args.db_path)
     db_fetcher = base.DataFetcher(db_connector)
     reporter = reporting.Reporter(db_fetcher)
 
-    ref_nav = reporter.get_portfolio_info(1, start_dt)['nav']
+    base_info = reporter.get_portfolio_info(1, start_dt)
+   
+    ref_profit = reporter.get_portfolio_info(1, start_dt)['profit']
+    ref_cost =  reporter.get_portfolio_info(1, end_dt)['cost']
+
 
 
     df_evolution = pd.DataFrame()
     df_evolution['DT'] = list(utils.daterange(start_dt, end_dt))
-    df_evolution['NAV'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x)['nav'])
-    df_evolution['RETURN'] = (df_evolution['NAV'] - ref_nav) * 100 / ref_nav
+    df_evolution['PROFIT'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x)['profit'])
+    df_evolution['COST'] = df_evolution['DT'].apply(lambda x: reporter.get_portfolio_info(1, x)['cost'])
+
+    df_evolution['RETURN'] = (df_evolution['PROFIT'] - ref_profit) * 100 / ref_cost
+
+    print(df_evolution.head())
 
     return df_evolution
 
 def get_composition(ref_date):
-    db_connector = base.BaseDBConnector('core.db')
+    global args
+
+    db_connector = base.BaseDBConnector(args.db_path)
     db_fetcher = base.DataFetcher(db_connector)
     reporter = reporting.Reporter(db_fetcher)
 
@@ -76,7 +95,9 @@ def get_form(fields, id_):
     return form_security
 
 def get_table(t_name):
-    db_connector = base.BaseDBConnector('core.db')
+    global args
+
+    db_connector = base.BaseDBConnector(args.db_path)
 
     df = db_connector.read_table(t_name)
 
@@ -98,7 +119,9 @@ def get_table(t_name):
     return table
 
 def update_data():
-    db_connector = base.BaseDBConnector('core.db')
+    global args
+
+    db_connector = base.BaseDBConnector(args.db_path)
     missing_data_getter = base.DBUpdater(db_conn=db_connector)
     _ = missing_data_getter.fetch_missing_fx(START_DT, now_)
     _ = missing_data_getter.fetch_missing_securities_yf(START_DT, now_)
@@ -141,7 +164,9 @@ def get_visual_data(start_dt, end_dt):
 
 vis_data = get_visual_data(START_DT, now_)
 
+
 if __name__ == '__main__':
+
     update_data()
 
     roi_div = html.Div(
@@ -238,8 +263,8 @@ if __name__ == '__main__':
     
     @app.server.route('/post_security_id', methods=['POST'])
     def on_security_post():
-
-        db_connector = base.BaseDBConnector('core.db')
+        global args
+        db_connector = base.BaseDBConnector(args.db_path)
         security_t_handler = base.TableHandler(db_connector, 'SECURITY', '')
 
         data = dict(flask.request.form)
@@ -252,8 +277,9 @@ if __name__ == '__main__':
 
     @app.server.route('/post_transaction_id', methods=['POST'])
     def on_transaction_post():
+        global args
 
-        db_connector = base.BaseDBConnector('core.db')
+        db_connector = base.BaseDBConnector(args.db_path)
         transaction_t_handler = base.TableHandler(db_connector, 'TRANSACTION', '')
         data = dict(flask.request.form)
 
@@ -265,8 +291,9 @@ if __name__ == '__main__':
 
     @app.server.route('/post_security_values_id', methods=['POST'])
     def on_security_values_post():
-        
-        db_connector = base.BaseDBConnector('core.db')
+        global args
+
+        db_connector = base.BaseDBConnector(args.db_path)
         security_values_t_handler = base.TableHandler(db_connector, 'SECURITY_VALUES', '')
         
         data = dict(flask.request.form)
