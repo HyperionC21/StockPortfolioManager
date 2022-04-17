@@ -5,8 +5,6 @@ class Reporter:
     def __init__(self, data_fecther):
         self._data_fetcher = data_fecther
 
-
-
     def get_portfolio_info(self, portfolio_id, ref_date, ref_cost=None):
         portfolio_composition = self._data_fetcher.fetch_portfolio_composition(portfolio_id, ref_date)
 
