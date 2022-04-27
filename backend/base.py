@@ -286,17 +286,38 @@ class DBUpdater(DataFetcher):
         query = f'''
         SELECT
             t1.CURRENCY_CD,
-            COALESCE(MAX(DATE(t2.DATE)), '{start_dt}') as FETCH_START_DT,
+            COALESCE(MAX(DATE(t2.DATE, '+1 day')), '{start_dt}') as FETCH_START_DT,
             '{end_dt}' as FETCH_END_DT
         FROM
             FX_CD t1
         LEFT JOIN
             FX t2 ON t1.CURRENCY_CD = t2.CURRENCY_CD
+        WHERE
+            t1.CURRENCY_CD <> '#NA'
         GROUP BY
             t2.CURRENCY_CD
         '''
 
-        return self.db_conn.read_query(query)
+        df_missing = self.db_conn.read_query(query)
+ 
+        for _, row in df_missing.iterrows():
+            ticker = yf.Ticker(row['CURRENCY_CD'])
+            try:
+                curr_hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
+            except:
+                print(row)
+            curr_hist.columns = list(map(lambda x: x.upper(), curr_hist.columns))	
+
+            curr_hist = curr_hist[['CLOSE', 'DATE']]
+            curr_hist.rename(columns={
+                'CLOSE' : 'VALUE'
+            }, inplace=True)
+            curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
+
+            try:
+                self.db_conn.insert_data(curr_hist, 'FX')
+            except:
+                print('Failed to insert: ', curr_hist, ' in FX')
     
     def fetch_missing_securities_yf(self, start_dt, end_dt):
         query = f'''
