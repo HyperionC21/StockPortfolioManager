@@ -286,7 +286,7 @@ class DBUpdater(DataFetcher):
         query = f'''
         SELECT
             t1.CURRENCY_CD,
-            COALESCE(MAX(DATE(t2.DATE, '+1 day')), '{start_dt}') as FETCH_START_DT,
+            COALESCE(MAX(DATE(t2.DATE, '+2 day')), '{start_dt}') as FETCH_START_DT,
             '{end_dt}' as FETCH_END_DT
         FROM
             FX_CD t1
@@ -299,7 +299,8 @@ class DBUpdater(DataFetcher):
         '''
 
         df_missing = self.db_conn.read_query(query)
- 
+
+        print(df_missing)
         for _, row in df_missing.iterrows():
             ticker = yf.Ticker(row['CURRENCY_CD'])
             try:
@@ -313,7 +314,6 @@ class DBUpdater(DataFetcher):
                 'CLOSE' : 'VALUE'
             }, inplace=True)
             curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
-
             try:
                 self.db_conn.insert_data(curr_hist, 'FX')
             except:

@@ -94,16 +94,7 @@ def get_statistics_page(vis_data, start_dt, end_dt, db_path):
                 ])
                 ],
                 style={'display': 'flex', 'flex-direction': 'column'}),
-            dcc.Tabs([
-                dcc.Tab(label='Value Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id')]),
-                dcc.Tab(label='Invested Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_c_pie'], id='c_pie_id')])
-            ]),
-            html.Br(),
-            dcc.Tabs([
-               dcc.Tab(label='PROFIT', children=[html.H1(int(vis_data['comp']['PROFIT'].sum()))]),
-               dcc.Tab(label='VALUE', children=[html.H1(int(vis_data['comp']['VALUE'].sum()))]),
-               dcc.Tab(label='INV', children=[html.H1(int(vis_data['comp']['TOTAL_COST'].sum()))]) 
-            ]),
+            dcc.Tab(label='Value Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id')]),
             html.Br(),
             dcc.Tabs([
                 dcc.Tab(label="Profit Percentage", children=[dcc.Graph(figure=vis_data['fig_pr_perc'])]),
