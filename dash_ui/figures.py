@@ -24,9 +24,11 @@ def get_evolution(start_dt, end_dt, db_path):
 
     df_evolution['RETURN'] = np.round(df_evolution['PROFIT'] * 100 / ref_cost, 2)
 
+    df_evolution.to_csv('pula.csv', index=False)
+  
     return df_evolution
 
-def get_composition(ref_date, db_path, oth_thresh=2):
+def get_composition(ref_date, db_path, oth_thresh=1):
     db_connector = base.BaseDBConnector(db_path)
     db_fetcher = base.DataFetcher(db_connector)
     reporter = reporting.Reporter(db_fetcher)
@@ -44,29 +46,6 @@ def get_composition(ref_date, db_path, oth_thresh=2):
     df_composition['TOTAL_COST'] = df_composition['TOTAL_COST'].astype(int)
     df_composition['PRICE'] = df_composition['PRICE'].apply(lambda x: np.round(x, 2))
 
-    df_comp_oth = df_composition[df_composition['VALUE%'] <= oth_thresh]
-    df_composition = df_composition[df_composition['VALUE%'] > oth_thresh]
-
-    def oth_gr_func(df):
-        res = {}
-
-        res['N_SHARES'] = np.nan
-        res['TOTAL_COST'] = df['TOTAL_COST'].sum()
-        res['PRICE'] = np.round((df['PRICE'] * df['N_SHARES']).sum() / df['N_SHARES'].sum(), 0)
-        res['FX'] = np.nan
-        res['VALUE'] = df['VALUE'].sum()
-        res['PROFIT'] = df['PROFIT'].sum()
-        res['PROFIT%'] = np.round((res['VALUE'] - res['TOTAL_COST']) * 100 / res['TOTAL_COST'], 2)
-        res['VALUE%'] = df['VALUE%'].sum()
-
-        return pd.Series(index=['N_SHARES', 'TOTAL_COST', 'PRICE', 'FX', 'VALUE', 'PROFIT', 'PROFIT%', 'VALUE%'], data=res)
-
-    df_comp_oth['TICKER'] = 'OTHER'
-
-    df_comp_oth = df_comp_oth.groupby(['TICKER', 'DT']).apply(oth_gr_func).reset_index()
-
-
-    df_composition = pd.concat([df_composition, df_comp_oth], axis=0)
     df_composition = df_composition.sort_values(by='VALUE', ascending=False)
     return df_composition.drop_duplicates()
 

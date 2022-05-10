@@ -97,8 +97,8 @@ def get_statistics_page(vis_data, start_dt, end_dt, db_path):
             dcc.Tab(label='Value Portfolio Composition', children=[dcc.Graph(figure=vis_data['fig_v_pie'], id='v_pie_id')]),
             html.Br(),
             dcc.Tabs([
-                dcc.Tab(label="Profit Percentage", children=[dcc.Graph(figure=vis_data['fig_pr_perc'])]),
-                dcc.Tab(label="Profit Absolute", children=[dcc.Graph(figure=vis_data['fig_pr'])])
+                dcc.Tab(label="Profit Percentage", children=[dcc.Graph(figure=vis_data['fig_pr_perc'], id='profit_perc_id')]),
+                dcc.Tab(label="Profit Absolute", children=[dcc.Graph(figure=vis_data['fig_pr'], id='profit_abs_id')])
             ]),
             html.Br(),
             get_table(vis_data['comp'], db_path=db_path)

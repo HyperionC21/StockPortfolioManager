@@ -10,6 +10,7 @@ import argparse
 from backend import base, reporting
 from utils import utils
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import flask
 
 
@@ -30,7 +31,14 @@ parser.add_argument("--db-path", type=str, help="Path for DB", default='core.db'
 
 args = parser.parse_args()
 
-
+def previous_quarter(ref):
+    if ref.month < 4:
+        return datetime.date(ref.year - 1, 12, 31)
+    elif ref.month < 7:
+        return datetime.date(ref.year, 3, 31)
+    elif ref.month < 10:
+        return datetime.date(ref.year, 6, 30)
+    return datetime.date(ref.year, 9, 30)
 
 def update_data(db_path):
 
@@ -41,7 +49,7 @@ def update_data(db_path):
     _ = missing_data_getter.fetch_missing_securities_bvb(START_DT, now_)
 
 
-START_DT = '2022-01-10'
+START_DT = '2021-06-18'
 now_ = utils.date2str(datetime.now())
 
 
@@ -99,6 +107,8 @@ if __name__ == '__main__':
         for k in data.keys():
             data[k] = [data[k]]
         
+        data['PORTFOLIO_ID'] = [1]
+
         transaction_t_handler.insert_val(data)
         return flask.redirect('/')
 
@@ -131,13 +141,14 @@ if __name__ == '__main__':
 
             start_dt = utils.str2date(START_DT)
             
+
             if value == 'MTD':
                 start_dt = end_dt.replace(day=1)
             elif value == 'WTD':
                 start_dt = end_dt - timedelta(days=end_dt.weekday())
             elif value == 'YTD':
                 start_dt = end_dt.replace(month=1, day=1) 
-            
+
             if start_dt < utils.str2date(START_DT):
                 start_dt = utils.str2date(START_DT)
 
@@ -167,7 +178,7 @@ if __name__ == '__main__':
             elif value == 'WTD':
                 start_dt = end_dt - timedelta(days=end_dt.weekday())
             elif value == 'YTD':
-                start_dt = end_dt.replace(month=1, day=1) 
+                start_dt = end_dt.replace(month=1, day=1)
             
             if start_dt < utils.str2date(START_DT):
                 start_dt = utils.str2date(START_DT)
@@ -198,7 +209,7 @@ if __name__ == '__main__':
             elif value == 'WTD':
                 start_dt = end_dt - timedelta(days=end_dt.weekday())
             elif value == 'YTD':
-                start_dt = end_dt.replace(month=1, day=1) 
+                start_dt = end_dt.replace(month=1, day=1)
             
             if start_dt < utils.str2date(START_DT):
                 start_dt = utils.str2date(START_DT)
@@ -213,18 +224,98 @@ if __name__ == '__main__':
     @app.callback(
         Output('v_pie_id', 'figure'),
         Input('roi_range', 'start_date'),
-        Input('roi_range', 'end_date'))
-    def update_v_pie(start_date, end_date):
-        return get_visual_data(start_date, end_date, args.db_path)['fig_v_pie']
+        Input('roi_range', 'end_date'),
+        Input('period_dropdown_id', 'value'))
+    def update_v_pie(start_date, end_date, value):
+        ctx = dash.callback_context
+        if ctx.triggered[0]['prop_id'] == 'period_dropdown_id.value':
+            end_dt = utils.str2date(now_)
+            
+            from datetime import timedelta
+
+            start_dt = utils.str2date(START_DT)
+            
+            if value == 'MTD':
+                start_dt = end_dt.replace(day=1)
+            elif value == 'WTD':
+                start_dt = end_dt - timedelta(days=end_dt.weekday())
+            elif value == 'YTD':
+                start_dt = end_dt.replace(month=1, day=1)
+            
+            if start_dt < utils.str2date(START_DT):
+                start_dt = utils.str2date(START_DT)
+
+            start_dt = utils.date2str(start_dt)
+            end_dt = utils.date2str(end_dt)
+
+            return get_visual_data(start_dt, end_dt, args.db_path)['fig_v_pie']
+        else:
+            return get_visual_data(start_date, end_date, args.db_path)['fig_v_pie']
     
+    
+    @app.callback(
+    Output('profit_perc_id', 'figure'),
+    Input('roi_range', 'start_date'),
+    Input('roi_range', 'end_date'),
+    Input('period_dropdown_id', 'value'))
+    def update_profit_perc(start_date, end_date, value):
+        ctx = dash.callback_context
+        if ctx.triggered[0]['prop_id'] == 'period_dropdown_id.value':
+            end_dt = utils.str2date(now_)
+            
+            from datetime import timedelta
+
+            start_dt = utils.str2date(START_DT)
+            
+            if value == 'MTD':
+                start_dt = end_dt.replace(day=1)
+            elif value == 'WTD':
+                start_dt = end_dt - timedelta(days=end_dt.weekday())
+            elif value == 'YTD':
+                start_dt = end_dt.replace(month=1, day=1)
+            
+            if start_dt < utils.str2date(START_DT):
+                start_dt = utils.str2date(START_DT)
+
+            start_dt = utils.date2str(start_dt)
+            end_dt = utils.date2str(end_dt)
+
+            return get_visual_data(start_dt, end_dt, args.db_path)['fig_pr_perc']
+        else:
+            return get_visual_data(start_date, end_date, args.db_path)['fig_pr_perc']
+
 
     @app.callback(
-        Output('c_pie_id', 'figure'),
-        Input('roi_range', 'start_date'),
-        Input('roi_range', 'end_date'))
-    def update_v_pie(start_date, end_date):
-        return get_visual_data(start_date, end_date, args.db_path)['fig_c_pie']
+    Output('profit_abs_id', 'figure'),
+    Input('roi_range', 'start_date'),
+    Input('roi_range', 'end_date'),
+    Input('period_dropdown_id', 'value'))
+    def update_profit_abs(start_date, end_date, value):
+        ctx = dash.callback_context
+        if ctx.triggered[0]['prop_id'] == 'period_dropdown_id.value':
+            end_dt = utils.str2date(now_)
+            
+            from datetime import timedelta
+
+            start_dt = utils.str2date(START_DT)
+            
+            if value == 'MTD':
+                start_dt = end_dt.replace(day=1)
+            elif value == 'WTD':
+                start_dt = end_dt - timedelta(days=end_dt.weekday())
+            elif value == 'YTD':
+                start_dt = end_dt.replace(month=1, day=1)
+            
+            if start_dt < utils.str2date(START_DT):
+                start_dt = utils.str2date(START_DT)
+
+            start_dt = utils.date2str(start_dt)
+            end_dt = utils.date2str(end_dt)
+
+            return get_visual_data(start_dt, end_dt, args.db_path)['fig_pr']
+        else:
+            return get_visual_data(start_date, end_date, args.db_path)['fig_pr']
 
     app.layout = get_default_page()
 
-    app.run_server(debug=True)
+    app.run_server(debug=False)

@@ -17,11 +17,15 @@ class Reporter:
         ticker_fx = self._data_fetcher.fetch_ticker_fx(ref_date).rename(columns={'VALUE' : 'FX'})
 
         df_out = pd.merge(df_out, ticker_fx, on='TICKER', how='inner')
+
+
         df_out['FX'] = df_out['FX'].fillna(1)
 
 
         df_out['VALUE'] = df_out['N_SHARES'] * df_out['PRICE'] * df_out['FX']
         
+        
+
         nav_at_dt = df_out['VALUE'].sum()
         cost_at_dt = df_out['TOTAL_COST'].sum()
 
@@ -37,3 +41,5 @@ class Reporter:
         }
 
         return res
+
+    
