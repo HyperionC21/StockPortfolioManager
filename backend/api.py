@@ -1,0 +1,37 @@
+import pandas as pd
+import numpy as np
+from . import fx_fetcher, misc_fetcher, ticker_fetcher, base
+
+class PortfolioStats:
+    def __init__(self, db_path, ref_date) -> None:
+        self.db_conn = base.BaseDBConnector(db_path)
+        self.fx_fetcher = fx_fetcher.FxFetcher(self.db_conn)
+        self.misc_fetcher = misc_fetcher.MiscFetcher(self.db_conn)
+        self.ticker_fetcher = ticker_fetcher.TickerFetcher(self.db_conn)
+
+        df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
+        prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
+        ticker_fx = self.ticker_fetcher.fetch_ticker_fx('2022-01-20')
+
+        df_portfolio = pd.merge(df_portfolio, prices, on='TICKER')
+        df_portfolio = pd.merge(df_portfolio, ticker_fx, on='TICKER')
+        df_portfolio['TOTAL_VALUE'] = df_portfolio['N_SHARES'] * df_portfolio['PRICE'] * df_portfolio['VALUE']
+        df_portfolio['PROFIT'] = df_portfolio['TOTAL_VALUE'] - df_portfolio['TOTAL_COST']
+        df_portfolio['PROFIT%'] = df_portfolio['PROFIT'] * 100 / df_portfolio['TOTAL_COST']
+
+        self.df_portfolio = df_portfolio
+
+    def get_nav(self):
+        return self.df_portfolio.TOTAL_VALUE.sum()
+    
+    def get_cost(self):
+        return self.df_portfolio.TOTAL_COST.sum()
+    
+    def get_profit(self):
+        return self.get_nav() - self.get_cost()
+    
+    def get_distrib(self):
+        res_ = self.df_portfolio[['TICKER', 'TOTAL_VALUE']]
+        res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
+
+        return res_
