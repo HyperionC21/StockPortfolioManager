@@ -16,6 +16,7 @@ class TickerFetcher(DataFetcher):
         return self.fetch_query(queries.ALL_TICKERS_QUERY)
     
     def fetch_ticker_prices(self, tickers, ref_date):
+        tickers = list(map(lambda x: f"'{x}'", tickers))
         return self.fetch_query(queries.TICKER_PRICES_QUERY.format(ref_date, ",".join(tickers)))
     
     def fetch_ticker_fx(self, ref_date):
