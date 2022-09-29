@@ -131,7 +131,7 @@ FST_TRANS_TICKER_QUERY = '''
 MISSING_TICKERS_DATA_QUERY = '''
             SELECT
             t1.TICKER,
-            COALESCE(DATE(DATETIME(MAX(DATE(t2.DATE)), '+1 day')), '{}') as FETCH_START_DT,
+            COALESCE(DATE(DATETIME(MAX(DATE(t2.DATE)), '+2 day')), '{}') as FETCH_START_DT,
             '{}' as FETCH_END_DT
         FROM
             SECURITY t1

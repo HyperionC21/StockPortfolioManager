@@ -14,7 +14,7 @@ class TickerFetcher(DataFetcher):
     
     def fetch_all_transacted_tickers(self):
         return self.fetch_query(queries.ALL_TICKERS_QUERY)
-    
+
     def fetch_ticker_prices(self, tickers, ref_date):
         tickers = list(map(lambda x: f"'{x}'", tickers))
         return self.fetch_query(queries.TICKER_PRICES_QUERY.format(ref_date, ",".join(tickers)))
@@ -38,11 +38,15 @@ class TickerFetcher(DataFetcher):
         
         df_tickers = self.fetch_all_transacted_tickers()
 
+        df_missing_tickers = self.fetch_query(queries.MISSING_TICKERS_DATA_QUERY.format(start_date, end_date))
+
+        df_missing_tickers = df_missing_tickers[df_missing_tickers.TICKER.isin(df_tickers.TICKER)]
+        
         hists = []
-        for _, row in df_tickers.iterrows():
+        for _, row in df_missing_tickers.iterrows():
             try:
                 ticker = yf.Ticker(row['TICKER'])
-                hist = ticker.history(start=start_date, end=end_date).reset_index()
+                hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
                 hist['TICKER'] = row['TICKER']
                 hists.append(hist)
             except Exception as e:
@@ -52,11 +56,10 @@ class TickerFetcher(DataFetcher):
         hist = pd.concat(hists, axis=0)
         hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
         hist.columns = list(map(lambda x: x.upper(), hist.columns))	
+        hist['DATE'] = hist['DATE'].astype(str)
 
-        try:
-            self.db_conn.insert_data(hist, 'SECURITY_VALUES')
-        except Exception as e:
-            print(e)
+        print(hist.dtypes)
+        self.db_conn.insert_data(hist, 'SECURITY_VALUES')
 
         return hist
     
