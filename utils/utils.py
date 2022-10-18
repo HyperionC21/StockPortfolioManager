@@ -6,9 +6,9 @@ def date2str(dt : datetime):
 def str2date(dt : str):
     return datetime.strptime(dt, r'%Y-%m-%d')
 
-def daterange(start_date : str, end_date : str):
+def daterange(start_date : str, end_date : str, step : int=1):
     start_dt = str2date(start_date)
     end_dt = str2date(end_date)
 
-    for n in range(int((end_dt - start_dt).days)):
+    for n in range(0, int((end_dt - start_dt).days), step):
         yield start_dt + timedelta(n)

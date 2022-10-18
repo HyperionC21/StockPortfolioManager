@@ -5,6 +5,8 @@ import numpy as np
 from . import fx_fetcher, misc_fetcher, ticker_fetcher, base
 from utils import utils
 
+
+
 class PortfolioStats:
     def __init__(self, db_path, ref_date) -> None:
         self.db_conn = base.BaseDBConnector(db_path)
@@ -33,6 +35,9 @@ class PortfolioStats:
     def get_profit(self):
         return self.get_nav() - self.get_cost()
     
+    def get_profit_perc(self):
+        return self.get_profit() * 100 / self.get_nav()
+
     def get_distrib(self):
         res_ = self.df_portfolio[['TICKER', 'TOTAL_VALUE']]
         res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
