@@ -22,18 +22,30 @@ app.layout = html.Div(children=[
             html.H2(children="Portfolio Performance"),
             dcc.Tabs(
                 children = [
-                    dcc.Tab(label="AGG Performance", children = dcc.Graph(id='portfolio_performance_fig_id')),
-                    dcc.Tab(label="Split Performance", children = dcc.Graph(id='portfolio_performance_split_fig_id'))
+                    dcc.Tab(label="AGG Performance", children = html.Div(children=[
+                        dcc.Graph(id='portfolio_performance_fig_id'),
+                        dcc.DatePickerRange(
+                            id='performance_picker_id',
+                            min_date_allowed=date(2022, 1, 10),
+                            max_date_allowed=datetime.now().date(),
+                            initial_visible_month=date(2022, 1, 10),
+                            end_date=datetime.now().date()
+                        ),
+                        dcc.Dropdown(options=['Absolute', 'Percentage'], id='kind_picker_id')
+                        ])),
+                    dcc.Tab(label="Split Performance", children = html.Div(children=[
+                        dcc.Graph(id='portfolio_performance_split_fig_id'),
+                        dcc.DatePickerRange(
+                            id='performance_picker_split_id',
+                            min_date_allowed=date(2022, 1, 10),
+                            max_date_allowed=datetime.now().date(),
+                            initial_visible_month=date(2022, 1, 10),
+                            end_date=datetime.now().date()
+                        )
+                        ])),
                 ]
             ),
-            dcc.DatePickerRange(
-                id='performance_picker_id',
-                min_date_allowed=date(2022, 1, 10),
-                max_date_allowed=datetime.now().date(),
-                initial_visible_month=date(2022, 1, 10),
-                end_date=datetime.now().date()
-            ),
-            dcc.Dropdown(options=['Absolute', 'Percentage'], id='kind_picker_id')
+            
         ]
     ),
     html.Div(
@@ -82,10 +94,31 @@ def update_output(start_date, end_date, value):
         }
     )
     df_tmp = pd.DataFrame(r.json())
-    df_tmp['date'] = df_tmp['date'].apply(lambda x: utils.str2date(x))
-    print(df_tmp.tail())
 
-    fig_ = px.line(df_tmp, 'date', 'profit')
+    
+    df_tmp['date'] = df_tmp['date'].apply(lambda x: utils.str2date(x))
+
+    fig_ = px.line(df_tmp, 'date', 'profit', markers=True)
+
+    return fig_
+
+@app.callback(
+    Output('portfolio_performance_split_fig_id', 'figure'),
+    Input('performance_picker_split_id', 'start_date'),
+    Input('performance_picker_split_id', 'end_date'))
+def update_performance_split(start_date, end_date):
+    r = requests.get(f"{BACKEND_URL}/performance_split", 
+        params={
+            "start_date" : start_date, 
+            "end_date" : end_date, 
+            "step" : PERFORMANCE_STEP,
+        }
+    )
+    df_tmp = pd.DataFrame(r.json())
+
+    df_tmp['DATE'] = df_tmp['DATE'].apply(lambda x: utils.str2date(x))
+    print(df_tmp.groupby("DATE").count())
+    fig_ = px.line(df_tmp, 'DATE', 'PROFIT%', color="TICKER", markers=True)
 
     return fig_
 

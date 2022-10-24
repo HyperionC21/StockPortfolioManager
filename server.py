@@ -56,6 +56,29 @@ def performance():
 
     return df_profits.to_dict()
 
+@app.route("/performance_split")
+def performance_split():
+    
+    db_conn = base.BaseDBConnector(DB_PATH)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+    start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
+    end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
+    step = int(request.args.get("step", 1))
+
+    
+    dfs = []
+    date_range = utils.daterange(start_dt, end_dt, step)
+    for date_ in date_range:
+        portfolio_img = api.PortfolioStats(DB_PATH, date_)
+        profit_perc = portfolio_img.get_profit_perc_distrib()
+        profit_perc['DATE'] = [utils.date2str(date_)] * len(profit_perc)
+        dfs.append(profit_perc)
+
+    df_res = pd.concat(dfs, axis=0)
+    
+    ret = df_res.to_dict(orient='list')
+    return ret
+
 @app.route("/composition")
 def composition():
     ref_date = request.args.get("ref_date", utils.date2str(datetime.now()))

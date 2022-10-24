@@ -47,6 +47,13 @@ class PortfolioStats:
             return self.get_profit() * 100 / ( self.ref_cost + 1E-24 )
         return self.get_profit() * 100 / ( self.get_cost() + 1E-24 )
 
+
+    def get_profit_perc_distrib(self):
+        return self.df_portfolio[['TICKER', 'PROFIT%']]
+
+    def get_profit_distrib(self):
+        return self.df_portfolio[['TICKER', 'PROFIT']]
+
     def get_distrib(self):
         res_ = self.df_portfolio[['TICKER', 'TOTAL_VALUE']]
         res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
