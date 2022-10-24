@@ -8,23 +8,30 @@ from utils import utils
 
 
 class PortfolioStats:
-    def __init__(self, db_path, ref_date) -> None:
+    def __init__(self, db_path, ref_date, ref_cost=None) -> None:
         self.db_conn = base.BaseDBConnector(db_path)
         self.fx_fetcher = fx_fetcher.FxFetcher(self.db_conn)
         self.misc_fetcher = misc_fetcher.MiscFetcher(self.db_conn)
         self.ticker_fetcher = ticker_fetcher.TickerFetcher(self.db_conn)
 
+        self.ref_cost = ref_cost
+
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
         prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
-        ticker_fx = self.ticker_fetcher.fetch_ticker_fx('2022-01-20')
+        ticker_fx = self.ticker_fetcher.fetch_ticker_fx(ref_date=ref_date)
 
-        df_portfolio = pd.merge(df_portfolio, prices, on='TICKER')
-        df_portfolio = pd.merge(df_portfolio, ticker_fx, on='TICKER')
+
+        df_portfolio = pd.merge(df_portfolio, prices, on='TICKER', how='inner')
+        df_portfolio = pd.merge(df_portfolio, ticker_fx, on='TICKER', how='left')
+
+        # Fill with 1 on local currency tickers
+        df_portfolio["VALUE"].fillna(1, inplace=True)
+
         df_portfolio['TOTAL_VALUE'] = df_portfolio['N_SHARES'] * df_portfolio['PRICE'] * df_portfolio['VALUE']
         df_portfolio['PROFIT'] = df_portfolio['TOTAL_VALUE'] - df_portfolio['TOTAL_COST']
         df_portfolio['PROFIT%'] = df_portfolio['PROFIT'] * 100 / df_portfolio['TOTAL_COST']
 
-        self.df_portfolio = df_portfolio
+        self.df_portfolio = df_portfolio.drop_duplicates()
 
     def get_nav(self):
         return self.df_portfolio.TOTAL_VALUE.sum()
@@ -36,7 +43,9 @@ class PortfolioStats:
         return self.get_nav() - self.get_cost()
     
     def get_profit_perc(self):
-        return self.get_profit() * 100 / self.get_nav()
+        if self.ref_cost:
+            return self.get_profit() * 100 / ( self.ref_cost + 1E-24 )
+        return self.get_profit() * 100 / ( self.get_cost() + 1E-24 )
 
     def get_distrib(self):
         res_ = self.df_portfolio[['TICKER', 'TOTAL_VALUE']]

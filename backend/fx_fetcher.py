@@ -4,6 +4,7 @@ import yfinance as yf
 # PROJECT IMPORTS
 from .base import DataFetcher
 from .sql import queries
+from utils import utils
 
 class FxFetcher(DataFetcher):
     def __init__(self, db_conn):
@@ -51,6 +52,7 @@ class FxFetcher(DataFetcher):
                 'CLOSE' : 'VALUE'
             }, inplace=True)
             curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
+            curr_hist['DATE'] = curr_hist['DATE'].apply(utils.date2str)
             try:
                 self.db_conn.insert_data(curr_hist, 'FX')
             except:

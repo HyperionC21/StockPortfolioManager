@@ -1,3 +1,4 @@
+from crypt import methods
 from datetime import datetime
 from flask import Flask, redirect, url_for, request
 
@@ -11,6 +12,14 @@ app = Flask(__name__)
 
 DB_PATH = 'core.db'
 
+db_conn = base.BaseDBConnector(DB_PATH)
+ticker_fetcher_ = ticker_fetcher.TickerFetcher(db_conn)
+fx_fetcher_ = fx_fetcher.FxFetcher(db_conn)
+misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+
+ticker_fetcher_.fetch_ticker_hist(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
+fx_fetcher_.fetch_missing_fx(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
+
 @app.route("/")
 def home():
     return "Hello, World!"
@@ -19,7 +28,7 @@ def home():
 def portfolio():
     ref_date = request.args.get("ref_date", utils.date2str(datetime.now()))
 
-    portfolio_stats_ = api.PortfolioStats('core.db', ref_date)
+    portfolio_stats_ = api.PortfolioStats(DB_PATH, ref_date)
     return portfolio_stats_.df_portfolio.to_dict()
 
 @app.route("/performance")
@@ -30,19 +39,31 @@ def performance():
     start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
     end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
     step = int(request.args.get("step", 1))
+    kind = request.args.get("kind", 'Absolute')
 
-    print(start_dt, end_dt, step)
 
     date_range = utils.daterange(start_dt, end_dt, step)
 
     df_profits = pd.DataFrame()
     df_profits['date'] = list(date_range)
-    df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats('core.db', x).get_profit())
+    if kind == 'Absolute':
+        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x).get_profit())
+    else:
+        ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
+        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x,
+         ref_cost=ref_cost).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
     return df_profits.to_dict()
 
+@app.route("/composition")
+def composition():
+    ref_date = request.args.get("ref_date", utils.date2str(datetime.now()))
 
+    ret = api.PortfolioStats(DB_PATH, ref_date).get_distrib().drop_duplicates().to_dict()
+
+    return ret
+    
 
 if __name__ == "__main__":
     app.run(debug=True)

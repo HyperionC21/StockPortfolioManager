@@ -6,58 +6,90 @@ from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
 from utils import utils
 from datetime import datetime, date
 
-db_conn = base.BaseDBConnector('core.db')
-ticker_fetcher_ = ticker_fetcher.TickerFetcher(db_conn)
-fx_fetcher_ = fx_fetcher.FxFetcher(db_conn)
-
 import requests
-
-ticker_fetcher_.fetch_ticker_hist('2022-01-01', utils.date2str(datetime.now()))
-fx_fetcher_.fetch_missing_fx('2022-01-01', utils.date2str(datetime.now()))
 
 app = Dash(__name__)
 
 BACKEND_URL = "http://127.0.0.1:5000"
 
 # UI CONFIG
-PERFORMANCE_STEP = 7
+PERFORMANCE_STEP = 2
 
 app.layout = html.Div(children=[
     html.H1(children='Portfolio Manager'),
     html.Div(
         children=[
-            dcc.Graph(id='portfolio_performance_fig_id'),
+            html.H2(children="Portfolio Performance"),
+            dcc.Tabs(
+                children = [
+                    dcc.Tab(label="AGG Performance", children = dcc.Graph(id='portfolio_performance_fig_id')),
+                    dcc.Tab(label="Split Performance", children = dcc.Graph(id='portfolio_performance_split_fig_id'))
+                ]
+            ),
             dcc.DatePickerRange(
                 id='performance_picker_id',
-                min_date_allowed=date(2022, 1, 9),
+                min_date_allowed=date(2022, 1, 10),
                 max_date_allowed=datetime.now().date(),
                 initial_visible_month=date(2022, 1, 10),
-                end_date=date(2022, 7, 1)
-            )
+                end_date=datetime.now().date()
+            ),
+            dcc.Dropdown(options=['Absolute', 'Percentage'], id='kind_picker_id')
         ]
-    )
-,
-
+    ),
+    html.Div(
+        children=[
+            html.H2(children="Porfolio Distribution"),
+            dcc.DatePickerSingle(
+                id='portfolio_distrib_date_picker_id',
+                min_date_allowed=date(2022, 1, 10),
+                max_date_allowed=datetime.now().date(),
+                initial_visible_month=date(2022, 1, 10),
+                date=datetime.now().date()
+            ),
+            dcc.Graph(id='Pie_Chart_Portfolio_id')
+        ]
+    ),
 ])
+
+@app.callback(
+    Output("Pie_Chart_Portfolio_id", "figure"),
+    Input("portfolio_distrib_date_picker_id", "date")
+)
+def update_portfolio(date):
+    r = requests.get(f"{BACKEND_URL}/composition", 
+        params={
+            "ref_date" : date 
+        }
+    )
+
+    df_tmp = pd.DataFrame(r.json())
+    out_fig = px.pie(df_tmp, names='TICKER', values='TOTAL_VALUE')
+    
+    return out_fig
 
 @app.callback(
     Output('portfolio_performance_fig_id', 'figure'),
     Input('performance_picker_id', 'start_date'),
-    Input('performance_picker_id', 'end_date'))
-def update_output(start_date, end_date):
+    Input('performance_picker_id', 'end_date'),
+    Input('kind_picker_id', 'value'))
+def update_output(start_date, end_date, value):
     r = requests.get(f"{BACKEND_URL}/performance", 
         params={
             "start_date" : start_date, 
             "end_date" : end_date, 
-            "step" : PERFORMANCE_STEP
+            "step" : PERFORMANCE_STEP,
+            "kind" :  value
         }
     )
     df_tmp = pd.DataFrame(r.json())
     df_tmp['date'] = df_tmp['date'].apply(lambda x: utils.str2date(x))
+    print(df_tmp.tail())
+
     fig_ = px.line(df_tmp, 'date', 'profit')
 
-    print(df_tmp.head())
     return fig_
 
 if __name__ == '__main__':
     app.run_server(debug=True)
+
+    

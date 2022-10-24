@@ -58,7 +58,6 @@ class TickerFetcher(DataFetcher):
         hist.columns = list(map(lambda x: x.upper(), hist.columns))	
         hist['DATE'] = hist['DATE'].astype(str)
 
-        print(hist.dtypes)
         self.db_conn.insert_data(hist, 'SECURITY_VALUES')
 
         return hist
