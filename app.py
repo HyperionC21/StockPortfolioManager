@@ -58,24 +58,27 @@ app.layout = html.Div(children=[
                 initial_visible_month=date(2022, 1, 10),
                 date=datetime.now().date()
             ),
-            dcc.Graph(id='Pie_Chart_Portfolio_id')
+            dcc.Graph(id='Pie_Chart_Portfolio_id'),
+            dcc.Dropdown(options=['TICKER', 'COUNTRY', 'SECTOR'], id='pie_split_dropdown_id')
         ]
     ),
 ])
 
 @app.callback(
     Output("Pie_Chart_Portfolio_id", "figure"),
-    Input("portfolio_distrib_date_picker_id", "date")
+    Input("portfolio_distrib_date_picker_id", "date"),
+    Input("pie_split_dropdown_id", "value")
 )
-def update_portfolio(date):
+def update_portfolio(date, value):
     r = requests.get(f"{BACKEND_URL}/composition", 
         params={
-            "ref_date" : date 
+            "ref_date" : date,
+            "hue" : value
         }
     )
 
     df_tmp = pd.DataFrame(r.json())
-    out_fig = px.pie(df_tmp, names='TICKER', values='TOTAL_VALUE')
+    out_fig = px.pie(df_tmp, names=value, values='TOTAL_VALUE')
     
     return out_fig
 
@@ -117,7 +120,7 @@ def update_performance_split(start_date, end_date):
     df_tmp = pd.DataFrame(r.json())
 
     df_tmp['DATE'] = df_tmp['DATE'].apply(lambda x: utils.str2date(x))
-    print(df_tmp.groupby("DATE").count())
+
     fig_ = px.line(df_tmp, 'DATE', 'PROFIT%', color="TICKER", markers=True)
 
     return fig_

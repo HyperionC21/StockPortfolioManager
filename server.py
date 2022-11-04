@@ -49,9 +49,9 @@ def performance():
     if kind == 'Absolute':
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x).get_profit())
     else:
-        ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
+        ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt).get_profit()
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x,
-         ref_cost=ref_cost).get_profit_perc())
+         ref_profit=ref_profit).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
     return df_profits.to_dict()
@@ -83,7 +83,9 @@ def performance_split():
 def composition():
     ref_date = request.args.get("ref_date", utils.date2str(datetime.now()))
 
-    ret = api.PortfolioStats(DB_PATH, ref_date).get_distrib().drop_duplicates().to_dict()
+    hue = request.args.get('hue', 'TICKER')
+
+    ret = api.PortfolioStats(DB_PATH, ref_date).get_distrib(hue).drop_duplicates().to_dict()
 
     return ret
     

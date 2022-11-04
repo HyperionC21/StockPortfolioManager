@@ -10,14 +10,19 @@ FST_TICKER_TRANS_QUERY = '''
 PORTFOLIO_COMP_QUERY = '''
             SELECT
                 t1.TICKER,
+                t2.SECTOR,
+                t2.COUNTRY,
                 SUM(t1.AMOUNT) as N_SHARES,
                 SUM(t1.AMOUNT * t1.PRICE * t1.FX) as TOTAL_COST,
                 '{}' as DT
             FROM
                 'TRANSACTION' as t1
+            INNER JOIN
+                'SECURITY' as t2
+            ON
+                t1.TICKER = t2.TICKER
             WHERE
                 1 = 1
-                AND t1.PORTFOLIO_ID = {}
                 AND DATE(t1.DATE) < DATE('{}')
             GROUP BY
                 t1.TICKER 
