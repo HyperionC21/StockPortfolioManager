@@ -12,6 +12,7 @@ PORTFOLIO_COMP_QUERY = '''
                 t1.TICKER,
                 t2.SECTOR,
                 t2.COUNTRY,
+                t2.FX,
                 SUM(t1.AMOUNT) as N_SHARES,
                 SUM(t1.AMOUNT * t1.PRICE * t1.FX) as TOTAL_COST,
                 '{}' as DT

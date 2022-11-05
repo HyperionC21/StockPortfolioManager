@@ -1,4 +1,3 @@
-from crypt import methods
 from datetime import datetime
 from flask import Flask, redirect, url_for, request
 

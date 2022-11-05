@@ -59,7 +59,7 @@ app.layout = html.Div(children=[
                 date=datetime.now().date()
             ),
             dcc.Graph(id='Pie_Chart_Portfolio_id'),
-            dcc.Dropdown(options=['TICKER', 'COUNTRY', 'SECTOR'], id='pie_split_dropdown_id')
+            dcc.Dropdown(options=['TICKER', 'COUNTRY', 'SECTOR', 'FX'], id='pie_split_dropdown_id')
         ]
     ),
 ])

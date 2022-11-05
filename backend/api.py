@@ -25,6 +25,7 @@ class PortfolioStats:
 
         # Fill with 1 on local currency tickers
         df_portfolio["VALUE"].fillna(1, inplace=True)
+        df_portfolio.loc[df_portfolio.FX == '#NA', "FX"] = "RON"
 
         df_portfolio['TOTAL_VALUE'] = df_portfolio['N_SHARES'] * df_portfolio['PRICE'] * df_portfolio['VALUE']
         df_portfolio['PROFIT'] = df_portfolio['TOTAL_VALUE'] - df_portfolio['TOTAL_COST']
@@ -56,7 +57,7 @@ class PortfolioStats:
 
     def get_distrib(self, hue='TICKER'):
 
-        res_ = self.df_portfolio[['TICKER', 'TOTAL_VALUE', 'COUNTRY', 'SECTOR']]
+        res_ = self.df_portfolio[['TOTAL_VALUE','TICKER', 'COUNTRY', 'FX', 'SECTOR']]
 
         res_ = res_.groupby(hue)['TOTAL_VALUE'].sum().reset_index()
 
