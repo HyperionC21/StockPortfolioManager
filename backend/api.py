@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import imp
 import pandas as pd
 import numpy as np
@@ -8,13 +8,14 @@ from utils import utils
 
 
 class PortfolioStats:
-    def __init__(self, db_path, ref_date, ref_profit=None) -> None:
+    def __init__(self, db_path, ref_date, ref_profit=None, ref_cost=None) -> None:
         self.db_conn = base.BaseDBConnector(db_path)
         self.fx_fetcher = fx_fetcher.FxFetcher(self.db_conn)
         self.misc_fetcher = misc_fetcher.MiscFetcher(self.db_conn)
         self.ticker_fetcher = ticker_fetcher.TickerFetcher(self.db_conn)
 
         self.ref_profit = ref_profit
+        self.ref_cost = ref_cost
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
         prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
@@ -44,9 +45,10 @@ class PortfolioStats:
     
 
     def get_profit_perc(self):
-        if self.ref_profit:
-            return (self.get_profit() - self.ref_profit) * 100 / ( self.get_cost() + 1E-24 )
-        return self.get_profit() * 100 / ( self.get_cost() + 1E-24 )
+        ref_cost = self.ref_cost if self.ref_cost else self.get_cost()
+        ref_profit = self.ref_profit if self.ref_profit else 0
+
+        return (self.get_profit() - ref_profit) * 100 / ( ref_cost + 1E-24 )
 
 
     def get_profit_perc_distrib(self):
@@ -63,7 +65,29 @@ class PortfolioStats:
 
         res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
 
-
-
         return res_
 
+class Metric:
+    def __init__(self, name, db_path, ref_dt, period, step) -> None:
+        self.ref_dt = ref_dt
+        self.period = period
+        self.step = step
+        self.name = name
+        self.db_path = db_path
+    
+    def get_name(self):
+        return self.name
+    
+    def compute(self):
+        raise NotImplementedError
+
+
+class ExpectedReturnMetric(Metric):
+    def __init__(self, name: str, db_path: str, ref_dt: datetime, period: timedelta, step: int, timeframe: str) -> None:
+        super().__init__(name, db_path, ref_dt, period, step)
+        self.timeframe = timeframe
+
+    def compute(self):
+        prior_dt = ''
+        ref_portfolio_stats = PortfolioStats(self.db_path, self.ref_dt)
+        

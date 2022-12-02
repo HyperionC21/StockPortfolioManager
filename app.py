@@ -13,7 +13,7 @@ app = Dash(__name__)
 BACKEND_URL = "http://127.0.0.1:5000"
 
 # UI CONFIG
-PERFORMANCE_STEP = 2
+PERFORMANCE_STEP = 7
 
 app.layout = html.Div(children=[
     html.H1(children='Portfolio Manager'),
@@ -26,7 +26,7 @@ app.layout = html.Div(children=[
                         dcc.Graph(id='portfolio_performance_fig_id'),
                         dcc.DatePickerRange(
                             id='performance_picker_id',
-                            min_date_allowed=date(2022, 1, 10),
+                            min_date_allowed=date(2021, 5, 1),
                             max_date_allowed=datetime.now().date(),
                             initial_visible_month=date(2022, 1, 10),
                             end_date=datetime.now().date()
@@ -37,7 +37,7 @@ app.layout = html.Div(children=[
                         dcc.Graph(id='portfolio_performance_split_fig_id'),
                         dcc.DatePickerRange(
                             id='performance_picker_split_id',
-                            min_date_allowed=date(2022, 1, 10),
+                            min_date_allowed=date(2021, 5, 1),
                             max_date_allowed=datetime.now().date(),
                             initial_visible_month=date(2022, 1, 10),
                             end_date=datetime.now().date()
@@ -53,7 +53,7 @@ app.layout = html.Div(children=[
             html.H2(children="Porfolio Distribution"),
             dcc.DatePickerSingle(
                 id='portfolio_distrib_date_picker_id',
-                min_date_allowed=date(2022, 1, 10),
+                min_date_allowed=date(2021, 5, 1),
                 max_date_allowed=datetime.now().date(),
                 initial_visible_month=date(2022, 1, 10),
                 date=datetime.now().date()

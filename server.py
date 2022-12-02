@@ -49,8 +49,10 @@ def performance():
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x).get_profit())
     else:
         ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt).get_profit()
+        ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
+
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x,
-         ref_profit=ref_profit).get_profit_perc())
+         ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
     return df_profits.to_dict()
