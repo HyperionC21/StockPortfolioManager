@@ -14,7 +14,10 @@ class PortfolioStats:
         self.misc_fetcher = misc_fetcher.MiscFetcher(self.db_conn)
         self.ticker_fetcher = ticker_fetcher.TickerFetcher(self.db_conn)
 
-        self.ref_profit = ref_profit
+        if ref_profit:
+            self.ref_profit = ref_profit
+        else:
+            self.ref_profit = 0
         self.ref_cost = ref_cost
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
@@ -32,7 +35,7 @@ class PortfolioStats:
         df_portfolio['PROFIT'] = df_portfolio['TOTAL_VALUE'] - df_portfolio['TOTAL_COST']
         df_portfolio['PROFIT%'] = df_portfolio['PROFIT'] * 100 / df_portfolio['TOTAL_COST']
 
-        self.df_portfolio = df_portfolio.drop_duplicates()
+        self.df_portfolio = df_portfolio.drop_duplicates(subset=['TICKER', 'COUNTRY'])
 
     def get_nav(self):
         return self.df_portfolio.TOTAL_VALUE.sum()
@@ -41,14 +44,17 @@ class PortfolioStats:
         return self.df_portfolio.TOTAL_COST.sum()
     
     def get_profit(self):
-        return self.get_nav() - self.get_cost()
+        return (self.get_nav() - self.get_cost()) - self.ref_profit
     
+    def get_security_info(self, ticker):
+        return self.df_portfolio[self.df_portfolio.TICKER == ticker].to_dict(orient='records')
+
 
     def get_profit_perc(self):
         ref_cost = self.ref_cost if self.ref_cost else self.get_cost()
         ref_profit = self.ref_profit if self.ref_profit else 0
 
-        return (self.get_profit() - ref_profit) * 100 / ( ref_cost + 1E-24 )
+        return np.round((self.get_profit() - ref_profit) * 100 / ( ref_cost + 1E-24 ), 1)
 
 
     def get_profit_perc_distrib(self):
@@ -67,13 +73,30 @@ class PortfolioStats:
 
         return res_
 
+class Period:
+    PERIOD_SIZE_MAP = {
+        'M' : timedelta(days=30),
+        'Y' : timedelta(days=365),
+        'W' : timedelta(days=7),
+        'Q' : timedelta(days=90)
+    }
+
+    def __init__(self, period: str) -> None:
+        import re
+        REGEX = r'(\d+)(\w+)'
+        
+        self.frame_size = re.search(REGEX, period).group(1)
+        self.period_size = Period.PERIOD_SIZE_MAP.get(re.search(REGEX, period).group(2))
+        self.delta = int(self.frame_size) * self.period_size
+    
+
+
 class Metric:
-    def __init__(self, name, db_path, ref_dt, period, step) -> None:
-        self.ref_dt = ref_dt
-        self.period = period
-        self.step = step
+    def __init__(self, name, db_path, period, ref_dt) -> None:
         self.name = name
+        self.period = Period(period)
         self.db_path = db_path
+        self.ref_dt = utils.date2str(datetime.now()) if not ref_dt else ref_dt
     
     def get_name(self):
         return self.name
@@ -81,13 +104,63 @@ class Metric:
     def compute(self):
         raise NotImplementedError
 
+class Nav(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('nav', db_path, period, ref_dt)
+    def compute(self):
+        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_nav())
 
-class ExpectedReturnMetric(Metric):
-    def __init__(self, name: str, db_path: str, ref_dt: datetime, period: timedelta, step: int, timeframe: str) -> None:
-        super().__init__(name, db_path, ref_dt, period, step)
-        self.timeframe = timeframe
+class CostBasis(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('cost_basis', db_path, period, ref_dt)
+    def compute(self):
+        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_cost())
+
+class Profit(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('profit', db_path, period, ref_dt)
+    def compute(self):
+        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_profit())
+
+class DivYield(Metric):
+    def __init__(self,db_path, period, ref_dt=None) -> None:
+        super().__init__('div_yield', db_path, period, ref_dt)
+    
+    def _compute_amt(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        end_dt = self.ref_dt
+        start_dt = utils.str2date(end_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+
+        return fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+
+    def _compute_avg_portfolio_nav(self):
+        start_dt = utils.str2date(self.ref_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+
+        date_range = utils.daterange(start_dt, self.ref_dt, step=30)
+        navs = list(map(lambda x: PortfolioStats(self.db_path, x).get_nav(), date_range))
+        return np.mean(navs)
 
     def compute(self):
-        prior_dt = ''
-        ref_portfolio_stats = PortfolioStats(self.db_path, self.ref_dt)
-        
+        div_amt = self._compute_amt()
+        avg_port_nav = self._compute_avg_portfolio_nav()
+        print(div_amt, avg_port_nav)
+        return np.round(div_amt / (avg_port_nav + 1E-24), 4)
+
+
+class DivVal(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('div_val', db_path, period, ref_dt)
+    
+    def compute(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        end_dt = self.ref_dt
+        start_dt = utils.str2date(end_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+
+        return np.round(fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt))

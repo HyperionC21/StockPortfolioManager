@@ -62,6 +62,16 @@ FX_VAL_QUERY = '''
                 AND RNK = 1
             '''
 
+DIVIDEND_AMT_QUERY = '''
+    SELECT
+        SUM(AMOUNT * FX)  "AMT"
+    FROM
+        `DIVIDEND` t1
+    WHERE
+        1 = 1
+        AND DATE(t1.DATE) >= DATE('{}') AND DATE(t1.DATE) <= DATE('{}')
+'''
+
 FX_MISSING_INTERVALS = '''
         SELECT
             t1.CURRENCY_CD,
@@ -137,14 +147,15 @@ FST_TRANS_TICKER_QUERY = '''
 MISSING_TICKERS_DATA_QUERY = '''
             SELECT
             t1.TICKER,
-            COALESCE(DATE(DATETIME(MAX(DATE(t2.DATE)), '+2 day')), '{}') as FETCH_START_DT,
+            t1.SRC,
+            COALESCE(DATE(DATETIME(MAX(DATE(t2.DATE)), '+1 day')), '{}') as FETCH_START_DT,
             '{}' as FETCH_END_DT
         FROM
             SECURITY t1
         LEFT JOIN
             SECURITY_VALUES t2 ON t1.TICKER = t2.TICKER
         WHERE
-            t1.SRC = 'YF'
+            t1.SRC IN ('YF', 'BVB')
         GROUP BY
             t1.TICKER
         '''

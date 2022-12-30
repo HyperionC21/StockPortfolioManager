@@ -8,6 +8,23 @@ from .fx_fetcher import FxFetcher
 from .sql import queries
 from utils import utils
 
+from bs4 import BeautifulSoup
+import requests
+
+URL = 'https://www.bvb.ro/FinancialInstruments/Details/FinancialInstrumentsDetails.aspx?s={}'
+
+def get_security_val(security):
+    try:
+        resp = requests.get(URL.format(security))
+        soup = BeautifulSoup(resp.content, "lxml")
+        res = soup.find_all('span', attrs={
+            'id' : 'ctl00_body_ctl02_PricesControl_dvCPrices_Label1'
+        })[0]
+        val = float(res.text.split('/')[0].strip())
+        return val
+    except:
+        print(f'Failed to get value for security: {security}')
+
 class TickerFetcher(DataFetcher):
     def __init__(self, db_conn):
         super().__init__(db_conn)
@@ -42,23 +59,37 @@ class TickerFetcher(DataFetcher):
 
         df_missing_tickers = df_missing_tickers[df_missing_tickers.TICKER.isin(df_tickers.TICKER)]
         
-        hists = []
         for _, row in df_missing_tickers.iterrows():
+            src = row['SRC']
+            if src == 'YF':
+                try:
+                    ticker = yf.Ticker(row['TICKER'])
+                    hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
+                    hist['TICKER'] = row['TICKER']
+                    hist = hist[hist.Date >= row['FETCH_START_DT']]
+                    hist['Date'] = hist['Date'].apply(utils.date2str)
+                except Exception as e:
+                    print(e)
+                    print(f'Ticker {row["TICKER"]} not found on yahoo finance')
+            elif src == 'BVB':
+                price = get_security_val(row['TICKER'])
+                if price is None:
+                    continue
+                res = {
+                    'Close' : [price],
+                    'High' : [None],
+                    'Low' : [None],
+                    'Open' : [None],
+                    'Date' : [utils.date2str(utils.datetime.now())],
+                    'TICKER' : [row['TICKER']]
+                }
+                hist = pd.DataFrame(res)
+            hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
+            hist.columns = list(map(lambda x: x.upper(), hist.columns))	
             try:
-                ticker = yf.Ticker(row['TICKER'])
-                hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
-                hist['TICKER'] = row['TICKER']
-                hists.append(hist)
+                self.db_conn.insert_data(hist, 'SECURITY_VALUES')
             except Exception as e:
                 print(e)
-                print(f'Ticker {row["TICKER"]} not found on yahoo finance')
-
-        hist = pd.concat(hists, axis=0)
-        hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
-        hist.columns = list(map(lambda x: x.upper(), hist.columns))	
-        hist['DATE'] = hist['DATE'].astype(str)
-
-        self.db_conn.insert_data(hist, 'SECURITY_VALUES')
-
-        return hist
+                print('Failed to insert security history for {} on {}'.format(hist['TICKER'].iloc[0], hist['DATE'].iloc[0]))
+                print(f'{row["FETCH_START_DT"]}')
     

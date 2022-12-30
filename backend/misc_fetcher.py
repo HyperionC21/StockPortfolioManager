@@ -14,3 +14,12 @@ class MiscFetcher(DataFetcher):
 
     def fetch_portfolio_composition(self, portfolio_id : int, ref_date : str):
         return self.fetch_query(queries.PORTFOLIO_COMP_QUERY.format(ref_date, ref_date))
+
+    def fetch_last_trans_on_ticker(self, ticker, cnt):
+        raise NotImplementedError()
+    
+    def fetch_dividend_amt(self, start_dt, end_dt):
+        res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt)).values[0][0]
+        if res_ is None:
+            return 0
+        return res_

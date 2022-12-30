@@ -13,7 +13,7 @@ app = Dash(__name__)
 BACKEND_URL = "http://127.0.0.1:5000"
 
 # UI CONFIG
-PERFORMANCE_STEP = 7
+PERFORMANCE_STEP = 3
 
 app.layout = html.Div(children=[
     html.H1(children='Portfolio Manager'),
