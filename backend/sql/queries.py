@@ -159,3 +159,14 @@ MISSING_TICKERS_DATA_QUERY = '''
         GROUP BY
             t1.TICKER
         '''
+
+LAST_TRANS_TICKER = '''
+    SELECT 
+        TICKER,
+        DATE,
+        AMOUNT as N_SHARES
+    FROM `TRANSACTION`
+    WHERE TICKER = '{}'
+    ORDER BY DATE DESC
+    LIMIT {}
+'''

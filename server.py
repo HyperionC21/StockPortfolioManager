@@ -188,7 +188,12 @@ def metric():
 def last_trans():
     ticker = request.args.get('ticker', '')
     cnt = request.args.get('cnt', 5)
-    return {}
+
+    db_conn = base.BaseDBConnector(DB_PATH)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+    res_ = misc_fetcher_.fetch_last_trans_on_ticker(ticker, cnt).to_dict()
+    print(res_)
+    return res_
 
 
 if __name__ == "__main__":

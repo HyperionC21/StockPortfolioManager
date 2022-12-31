@@ -120,7 +120,12 @@ class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:
         super().__init__('profit', db_path, period, ref_dt)
     def compute(self):
-        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_profit())
+        start_dt = utils.str2date(self.ref_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+        
+        ref_profit = PortfolioStats(self.db_path, start_dt).get_profit()
+
+        return np.round(PortfolioStats(self.db_path, self.ref_dt, ref_profit=ref_profit).get_profit())
 
 class DivYield(Metric):
     def __init__(self,db_path, period, ref_dt=None) -> None:
