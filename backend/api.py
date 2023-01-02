@@ -46,8 +46,22 @@ class PortfolioStats:
     def get_profit(self):
         return (self.get_nav() - self.get_cost()) - self.ref_profit
     
-    def get_security_info(self, ticker):
-        return self.df_portfolio[self.df_portfolio.TICKER == ticker].to_dict(orient='records')
+    def get_security_info(self, ticker, hue = 'TICKER'):
+        if hue == 'TICKER':
+            print('PULA')
+            return self.df_portfolio[self.df_portfolio.TICKER == ticker].to_dict(orient='records')
+        elif hue in ('COUNTRY', 'FX', 'SECTOR'):
+            df_aux = self.df_portfolio[self.df_portfolio[hue] == ticker]
+            df_aux = df_aux.groupby(hue)
+            df_aux = df_aux.agg({
+                'TOTAL_VALUE' : ['sum'],
+                'PROFIT' : ['sum'],
+            }).reset_index()
+            df_aux.columns = list(map(lambda x: x[0], df_aux.columns))
+            df_aux['PROFIT%'] = df_aux['PROFIT'] * 100 / df_aux['TOTAL_VALUE']
+            df_aux['COUNTRY'] = ''
+            print(df_aux)
+            return df_aux.to_dict(orient='records')
 
 
     def get_profit_perc(self):
@@ -70,6 +84,11 @@ class PortfolioStats:
         res_ = res_.groupby(hue)['TOTAL_VALUE'].sum().reset_index()
 
         res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
+
+        res_ = res_.rename(columns={
+            'TOTAL_VALUE' : 'VALUE',
+            hue : 'LABEL'
+        })
 
         return res_
 

@@ -119,19 +119,20 @@ def composition():
     hue = request.args.get('hue', 'TICKER')
 
     ret = api.PortfolioStats(DB_PATH, ref_date).get_distrib(hue).drop_duplicates().to_dict()
-
+    
     return ret
 
 @app.route("/security_info")
 def security_info():
     security = request.args.get('security')
+    hue = request.args.get('hue', 'TICKER')
     ref_date = request.args.get('dt', utils.date2str(datetime.now()))
 
     ret = {}
 
     if security:
         stats = api.PortfolioStats(DB_PATH, ref_date)
-        security_stats = stats.get_security_info(security)
+        security_stats = stats.get_security_info(security, hue)
         if len(security_stats) > 0:
             ret = security_stats[0]
 
