@@ -162,6 +162,18 @@ def new_dividend():
     db_conn.insert_data(df, 'DIVIDEND')
     return {}
 
+@app.route("/new_quote", methods=['POST'])
+def new_quote():
+    data = request.json
+    for k in data:
+        data[k] = [data[k]]
+    df = pd.DataFrame(data)
+    print(data)
+    print(df)
+    db_conn = base.BaseDBConnector(DB_PATH)
+    db_conn.insert_data(df, 'SECURITY')
+    return {}
+
 @app.route("/metric", methods=['GET'])
 def metric():
     metric_ = request.args.get('metric')
@@ -196,6 +208,16 @@ def last_trans():
     print(res_)
     return res_
 
+@app.route('/last_dividends', methods=['GET'])
+def last_dividend():
+    ticker = request.args.get('ticker', '')
+    cnt = request.args.get('cnt', 5)
+
+    db_conn = base.BaseDBConnector(DB_PATH)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+    res_ = misc_fetcher_.fetch_last_div_on_ticker(ticker, cnt).to_dict()
+    print(res_)
+    return res_
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5001, debug=True)

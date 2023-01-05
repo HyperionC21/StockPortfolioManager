@@ -55,7 +55,7 @@ class PortfolioStats:
             df_aux = df_aux.groupby(hue)
             df_aux = df_aux.agg({
                 'TOTAL_VALUE' : ['sum'],
-                'PROFIT' : ['sum'],
+                'PROFIT' : ['sum']
             }).reset_index()
             df_aux.columns = list(map(lambda x: x[0], df_aux.columns))
             df_aux['PROFIT%'] = df_aux['PROFIT'] * 100 / df_aux['TOTAL_VALUE']

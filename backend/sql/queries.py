@@ -24,7 +24,7 @@ PORTFOLIO_COMP_QUERY = '''
                 t1.TICKER = t2.TICKER
             WHERE
                 1 = 1
-                AND DATE(t1.DATE) < DATE('{}')
+                AND DATE(t1.DATE) <= DATE('{}')
             GROUP BY
                 t1.TICKER 
         '''
@@ -166,6 +166,17 @@ LAST_TRANS_TICKER = '''
         DATE,
         AMOUNT as N_SHARES
     FROM `TRANSACTION`
+    WHERE TICKER = '{}'
+    ORDER BY DATE DESC
+    LIMIT {}
+'''
+
+LAST_DIVIDEND_TICKER = '''
+    SELECT 
+        TICKER,
+        DATE,
+        AMOUNT as AMT
+    FROM `DIVIDEND`
     WHERE TICKER = '{}'
     ORDER BY DATE DESC
     LIMIT {}

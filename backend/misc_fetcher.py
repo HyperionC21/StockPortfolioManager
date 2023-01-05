@@ -19,6 +19,10 @@ class MiscFetcher(DataFetcher):
         res_ = self.fetch_query(queries.LAST_TRANS_TICKER.format(ticker, cnt))
         return res_
     
+    def fetch_last_div_on_ticker(self, ticker, cnt):
+        res_ = self.fetch_query(queries.LAST_DIVIDEND_TICKER.format(ticker, cnt))
+        return res_
+    
     def fetch_dividend_amt(self, start_dt, end_dt):
         res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt)).values[0][0]
         if res_ is None:
