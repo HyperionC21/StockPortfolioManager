@@ -8,7 +8,7 @@ from utils import utils
 
 
 class PortfolioStats:
-    def __init__(self, db_path, ref_date, ref_profit=None, ref_cost=None) -> None:
+    def __init__(self, db_path, ref_date, filters=None, filter_kind=None, ref_profit=None, ref_cost=None) -> None:
         self.db_conn = base.BaseDBConnector(db_path)
         self.fx_fetcher = fx_fetcher.FxFetcher(self.db_conn)
         self.misc_fetcher = misc_fetcher.MiscFetcher(self.db_conn)
@@ -21,6 +21,8 @@ class PortfolioStats:
         self.ref_cost = ref_cost
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
+        if filters and filter_kind:
+            df_portfolio = df_portfolio[df_portfolio[filter_kind] == filters]
         prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
         ticker_fx = self.ticker_fetcher.fetch_ticker_fx(ref_date=ref_date)
 

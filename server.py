@@ -61,6 +61,8 @@ def performance():
     default_interval = request.args.get("default_interval")
     step = int(request.args.get("step", 1))
     kind = request.args.get("kind", 'Absolute')
+    filters = request.args.get("filters")
+    filter_kind = request.args.get("filter_kind")
 
     if default_interval:
         try:
@@ -78,12 +80,12 @@ def performance():
     df_profits['date'] = list(date_range)
     ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt).get_profit()
     if kind == 'Absolute':
-        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, ref_profit=ref_profit).get_profit())
+        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind, ref_profit=ref_profit).get_profit())
     else:
         
         ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
 
-        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x,
+        df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind,
          ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
