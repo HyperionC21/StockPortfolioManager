@@ -102,22 +102,32 @@ class Period:
         'Q' : timedelta(days=90)
     }
 
-    def __init__(self, period: str) -> None:
+    MISC_PERIODS = {'YTD'}
+
+    def __init__(self, period: str, ref_dt: datetime=None) -> None:
         import re
         REGEX = r'(\d+)(\w+)'
         
-        self.frame_size = re.search(REGEX, period).group(1)
-        self.period_size = Period.PERIOD_SIZE_MAP.get(re.search(REGEX, period).group(2))
-        self.delta = int(self.frame_size) * self.period_size
+        ref_dt = utils.str2date(ref_dt)
+
+        if period not in Period.MISC_PERIODS:
+            self.frame_size = re.search(REGEX, period).group(1)
+            self.period_size = Period.PERIOD_SIZE_MAP.get(re.search(REGEX, period).group(2))
+            self.delta = int(self.frame_size) * self.period_size
+        else:
+            start_dt = ref_dt.replace(month=1, day=1)
+            self.delta = ref_dt - start_dt
+            assert isinstance(self.delta, timedelta)
     
 
 
 class Metric:
     def __init__(self, name, db_path, period, ref_dt) -> None:
-        self.name = name
-        self.period = Period(period)
-        self.db_path = db_path
         self.ref_dt = utils.date2str(datetime.now()) if not ref_dt else ref_dt
+        self.period = Period(period, self.ref_dt)
+
+        self.db_path = db_path
+        
     
     def get_name(self):
         return self.name
@@ -141,6 +151,7 @@ class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:
         super().__init__('profit', db_path, period, ref_dt)
     def compute(self):
+
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
         

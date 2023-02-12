@@ -19,9 +19,9 @@ misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
 ticker_fetcher_.fetch_ticker_hist(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
 fx_fetcher_.fetch_missing_fx(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
 
-TIME_INTERVALS = ['1W', '1M', '1Q', '6M', '1Y', '3Y', '5Y']
+TIME_INTERVALS = ['1W', '1M', '1Q', '6M', '1Y', 'YTD', '3Y', '5Y']
 
-def get_delta_from_interval(default_interval):
+def get_delta_from_interval(default_interval, ref_dt=None):
     if default_interval == '1W':
         return timedelta(days=7)
     elif default_interval == '1M':
@@ -36,6 +36,10 @@ def get_delta_from_interval(default_interval):
         return timedelta(3 * 365)
     elif default_interval == '5Y':
         return timedelta(5 * 365)
+    elif default_interval == 'YTD':
+        ref_dt = utils.str2date(ref_dt)
+        start_dt = ref_dt.replace(month=1, day=1)
+        return ref_dt - start_dt
     raise Exception(f'Interval {default_interval} not registered for parsing') 
 
 @app.route("/")
@@ -66,8 +70,9 @@ def performance():
 
     if default_interval:
         try:
-            delta = get_delta_from_interval(default_interval)
+            delta = get_delta_from_interval(default_interval, end_dt)
             start_dt = utils.date2str((utils.str2date(end_dt) - delta))
+            print(start_dt)
         except Exception as e:
             print(e)
     
