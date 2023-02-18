@@ -70,7 +70,7 @@ class PortfolioStats:
         ref_cost = self.ref_cost if self.ref_cost else self.get_cost()
         ref_profit = self.ref_profit if self.ref_profit else 0
 
-        return np.round((self.get_profit() - ref_profit) * 100 / ( ref_cost + 1E-24 ), 1)
+        return np.round((self.get_nav() - (self.get_cost() + ref_profit)) * 100 / ( ref_cost + 1E-24 ), 1)
 
 
     def get_profit_perc_distrib(self):

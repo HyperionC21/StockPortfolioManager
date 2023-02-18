@@ -129,6 +129,14 @@ def composition():
     
     return ret
 
+@app.route("/portfolio_stats")
+def portfolio_stats():
+    ref_date = datetime.now()
+
+    ret = api.PortfolioStats(DB_PATH, ref_date).df_portfolio.to_dict()
+    
+    return ret
+
 @app.route("/security_info")
 def security_info():
     security = request.args.get('security')
