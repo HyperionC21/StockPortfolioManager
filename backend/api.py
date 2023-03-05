@@ -21,6 +21,7 @@ class PortfolioStats:
         self.ref_cost = ref_cost
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
+        
         if filters and filter_kind:
             df_portfolio = df_portfolio[df_portfolio[filter_kind] == filters]
         prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
@@ -38,6 +39,10 @@ class PortfolioStats:
         df_portfolio['PROFIT%'] = df_portfolio['PROFIT'] * 100 / df_portfolio['TOTAL_COST']
 
         self.df_portfolio = df_portfolio.drop_duplicates(subset=['TICKER', 'COUNTRY'])
+        
+
+    def get_fee(self):
+        return self.df_portfolio.TOTAL_FEE.sum()
 
     def get_nav(self):
         return self.df_portfolio.TOTAL_VALUE.sum()
@@ -46,7 +51,7 @@ class PortfolioStats:
         return self.df_portfolio.TOTAL_COST.sum()
     
     def get_profit(self):
-        return (self.get_nav() - self.get_cost()) - self.ref_profit
+        return (self.get_nav() - self.get_cost() - self.get_fee()) - self.ref_profit
     
     def get_security_info(self, ticker, hue = 'TICKER'):
         if hue == 'TICKER':
@@ -70,7 +75,7 @@ class PortfolioStats:
         ref_cost = self.ref_cost if self.ref_cost else self.get_cost()
         ref_profit = self.ref_profit if self.ref_profit else 0
 
-        return np.round((self.get_nav() - (self.get_cost() + ref_profit)) * 100 / ( ref_cost + 1E-24 ), 1)
+        return np.round((self.get_nav() - (self.get_cost() + self.get_fee() + ref_profit)) * 100 / ( ref_cost + 1E-24 ), 1)
 
 
     def get_profit_perc_distrib(self):
@@ -146,6 +151,33 @@ class CostBasis(Metric):
         super().__init__('cost_basis', db_path, period, ref_dt)
     def compute(self):
         return np.round(PortfolioStats(self.db_path, self.ref_dt).get_cost())
+
+class Fee(Metric):
+     def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('fee', db_path, period, ref_dt)
+    
+     def compute(self):
+        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_fee()) 
+
+class PeriodProfitVal(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('periodprofitperc', db_path, period, ref_dt)
+
+    def compute(self):
+        start_dt = utils.str2date(self.ref_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+
+        start_profit = PortfolioStats(self.db_path, start_dt).get_profit()
+        end_profit = PortfolioStats(self.db_path, self.ref_dt).get_profit()
+
+        profit = end_profit - start_profit
+        n_days = self.period.delta.total_seconds() / ( 3600 * 24)
+
+        annualized_profit = profit * 365 / n_days
+
+        return annualized_profit
+
+
 
 class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:

@@ -61,6 +61,7 @@ class TickerFetcher(DataFetcher):
         
         for _, row in df_missing_tickers.iterrows():
             src = row['SRC']
+            print(f'fetching {row["TICKER"]}')
             if src == 'YF':
                 try:
                     ticker = yf.Ticker(row['TICKER'])

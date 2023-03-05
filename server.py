@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from flask import Flask, redirect, url_for, request
 
-
+import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
 from utils import utils
 
@@ -11,13 +11,14 @@ app = Flask(__name__)
 
 DB_PATH = 'core.db'
 
-db_conn = base.BaseDBConnector(DB_PATH)
-ticker_fetcher_ = ticker_fetcher.TickerFetcher(db_conn)
-fx_fetcher_ = fx_fetcher.FxFetcher(db_conn)
-misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+def fetch_data():
+    db_conn = base.BaseDBConnector(DB_PATH)
+    ticker_fetcher_ = ticker_fetcher.TickerFetcher(db_conn)
+    fx_fetcher_ = fx_fetcher.FxFetcher(db_conn)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
 
-ticker_fetcher_.fetch_ticker_hist(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
-fx_fetcher_.fetch_missing_fx(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
+    ticker_fetcher_.fetch_ticker_hist(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
+    fx_fetcher_.fetch_missing_fx(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
 
 TIME_INTERVALS = ['1W', '1M', '1Q', '6M', '1Y', 'YTD', '3Y', '5Y']
 
@@ -206,6 +207,10 @@ def metric():
         metric_val = api.CostBasis(DB_PATH, period_).compute()
     elif metric_ == 'profit':
         metric_val = api.Profit(DB_PATH, period_).compute()
+    elif metric_ == 'fee':
+        metric_val = api.Fee(DB_PATH, period_).compute()
+    elif metric_ == 'annualized_profit_period':
+        metric_val = api.PeriodProfitVal(DB_PATH, period_).compute()
 
     return {
         'metric' : metric_,
@@ -235,4 +240,6 @@ def last_dividend():
     return res_
 
 if __name__ == "__main__":
+    p = multiprocessing.Process(target=fetch_data)
+    p.start()
     app.run(host='0.0.0.0', port=5001, debug=True)
