@@ -55,7 +55,6 @@ class PortfolioStats:
     
     def get_security_info(self, ticker, hue = 'TICKER'):
         if hue == 'TICKER':
-            print('PULA')
             return self.df_portfolio[self.df_portfolio.TICKER == ticker].to_dict(orient='records')
         elif hue in ('COUNTRY', 'FX', 'SECTOR'):
             df_aux = self.df_portfolio[self.df_portfolio[hue] == ticker]
@@ -67,7 +66,6 @@ class PortfolioStats:
             df_aux.columns = list(map(lambda x: x[0], df_aux.columns))
             df_aux['PROFIT%'] = df_aux['PROFIT'] * 100 / df_aux['TOTAL_VALUE']
             df_aux['COUNTRY'] = ''
-            print(df_aux)
             return df_aux.to_dict(orient='records')
 
 
@@ -107,9 +105,9 @@ class Period:
         'Q' : timedelta(days=90)
     }
 
-    MISC_PERIODS = {'YTD'}
+    MISC_PERIODS = {'YTD', 'ALL'}
 
-    def __init__(self, period: str, ref_dt: datetime=None) -> None:
+    def __init__(self, period: str, ref_dt: datetime=None, portfolio_start_dt: datetime=None) -> None:
         import re
         REGEX = r'(\d+)(\w+)'
         
@@ -120,16 +118,29 @@ class Period:
             self.period_size = Period.PERIOD_SIZE_MAP.get(re.search(REGEX, period).group(2))
             self.delta = int(self.frame_size) * self.period_size
         else:
-            start_dt = ref_dt.replace(month=1, day=1)
-            self.delta = ref_dt - start_dt
-            assert isinstance(self.delta, timedelta)
-    
+            if period == 'YTD':
+                start_dt = ref_dt.replace(month=1, day=1)
+                self.delta = ref_dt - start_dt
+            elif period == 'ALL':
+                start_dt = utils.str2date(portfolio_start_dt)
+                self.delta = ref_dt - start_dt
+        assert isinstance(self.delta, timedelta)
 
+
+
+
+    
 
 class Metric:
     def __init__(self, name, db_path, period, ref_dt) -> None:
         self.ref_dt = utils.date2str(datetime.now()) if not ref_dt else ref_dt
-        self.period = Period(period, self.ref_dt)
+        portfolio_start_dt = None
+        if period == 'ALL' and db_path is not None:
+            db_conn = base.BaseDBConnector(db_path)
+            misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+            portfolio_start_dt = misc_fetcher_.fetch_fst_trans()
+        
+        self.period = Period(period, self.ref_dt, portfolio_start_dt)
 
         self.db_path = db_path
         
@@ -161,7 +172,7 @@ class Fee(Metric):
 
 class PeriodProfitVal(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:
-        super().__init__('periodprofitperc', db_path, period, ref_dt)
+        super().__init__('periodprofitval', db_path, period, ref_dt)
 
     def compute(self):
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
@@ -177,7 +188,24 @@ class PeriodProfitVal(Metric):
 
         return annualized_profit
 
+class PeriodProfitPerc(Metric):
+    def __init__(self, db_path, period, ref_dt=None) -> None:
+        super().__init__('periodprofitperc', db_path, period, ref_dt)
 
+    def compute(self):
+        start_dt = utils.str2date(self.ref_dt) - self.period.delta
+        start_dt = utils.date2str(start_dt)
+
+        start_profit = PortfolioStats(self.db_path, start_dt).get_profit()
+        end_profit = PortfolioStats(self.db_path, self.ref_dt).get_profit()
+
+        profit = end_profit - start_profit
+        n_days = self.period.delta.total_seconds() / ( 3600 * 24)
+
+        annualized_profit = profit * 365 / n_days
+        ref_cost = PortfolioStats(self.db_path, self.ref_dt).get_cost()
+
+        return  np.round(annualized_profit * 100 / (ref_cost + 1E-24), 2)
 
 class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:
@@ -233,3 +261,30 @@ class DivVal(Metric):
         start_dt = utils.date2str(start_dt)
 
         return np.round(fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt))
+
+class DivSecurity(Metric):
+    def __init__(self, ticker, db_path) -> None:
+        self.ticker = ticker
+        self.db_path = db_path
+
+    def compute(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        try:
+            res_ = np.round(fetcher.fetch_security_dividend_amt(self.ticker).values[0][0], 2)
+        except:
+            res_ = 0
+        return res_
+
+class PE(Metric):
+    def __init__(self, ticker) -> None:
+        self.ticker = ticker
+    
+    def compute(self):
+        try:
+            ticker = base.yf.Ticker(self.ticker)
+            ticker_info = ticker.info
+            return ticker_info.get('forwardPE', 'N/A')
+        except:
+            return 'N/A'

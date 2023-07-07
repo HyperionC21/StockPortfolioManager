@@ -9,6 +9,10 @@ class MiscFetcher(DataFetcher):
     def __init__(self, db_conn):
         super().__init__(db_conn)
 
+    def fetch_security_dividend_amt(self, ticker):
+        res_ = self.fetch_query(queries.SECURITY_DIV_VAL.format(ticker))
+        return res_
+
     def fetch_fst_trans(self):
         return self.fetch_query(queries.FST_TICKER_TRANS_QUERY).FST_BUY_DT[0]
 

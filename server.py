@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from flask import Flask, redirect, url_for, request
+from flask import Flask, request
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
@@ -194,6 +194,7 @@ def new_quote():
 def metric():
     metric_ = request.args.get('metric')
     period_ = request.args.get('period')
+    ticker = request.args.get('ticker')
 
     metric_val = 'N/A'
 
@@ -211,6 +212,12 @@ def metric():
         metric_val = api.Fee(DB_PATH, period_).compute()
     elif metric_ == 'annualized_profit_period':
         metric_val = api.PeriodProfitVal(DB_PATH, period_).compute()
+    elif metric_ == 'annualized_profit_perc_period':
+        metric_val = api.PeriodProfitPerc(DB_PATH, period_).compute()
+    elif metric_ == 'PE':
+        metric_val = api.PE(ticker).compute()
+    elif metric_ == 'security_div_amt':
+        metric_val = api.DivSecurity(ticker, DB_PATH).compute()
 
     return {
         'metric' : metric_,

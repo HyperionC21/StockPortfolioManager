@@ -27,7 +27,8 @@ PORTFOLIO_COMP_QUERY = '''
                 1 = 1
                 AND DATE(t1.DATE) <= DATE('{}')
             GROUP BY
-                t1.TICKER 
+                t1.TICKER
+            HAVING SUM(t1.AMOUNT) > 0 
         '''
 
 CURRENCY_QUERY = '''
@@ -181,4 +182,12 @@ LAST_DIVIDEND_TICKER = '''
     WHERE TICKER = '{}'
     ORDER BY DATE DESC
     LIMIT {}
+'''
+
+SECURITY_DIV_VAL = '''
+    SELECT
+        SUM(AMOUNT * FX)
+    FROM
+        `DIVIDEND`
+    WHERE TICKER = '{}'
 '''

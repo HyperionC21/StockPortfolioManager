@@ -16,12 +16,12 @@ URL = 'https://www.bvb.ro/FinancialInstruments/Details/FinancialInstrumentsDetai
 def get_security_val(security):
     try:
         resp = requests.get(URL.format(security))
-        soup = BeautifulSoup(resp.content, "lxml")
-        res = soup.find_all('span', attrs={
-            'id' : 'ctl00_body_ctl02_PricesControl_dvCPrices_Label1'
-        })[0]
-        val = float(res.text.split('/')[0].strip())
-        return val
+        soup = BeautifulSoup(resp.content, "html.parser")
+        res = soup.find_all('tr')
+        res = list(filter(lambda x: len(BeautifulSoup(str(x), 'html.parser').find_all('td', text='Ultimul pret')) > 0, res))[0]
+        res = float(BeautifulSoup(str(res), 'html.parser').find('b').text.replace(',', '.'))
+        res
+        return res
     except:
         print(f'Failed to get value for security: {security}')
 
