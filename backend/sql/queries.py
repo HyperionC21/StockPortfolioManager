@@ -191,3 +191,20 @@ SECURITY_DIV_VAL = '''
         `DIVIDEND`
     WHERE TICKER = '{}'
 '''
+
+SECURITY_COST_BASIS_VAL = '''
+    SELECT
+        SUM(AMOUNT * PRICE * FX) + SUM(FEE * FX)
+    FROM
+        `TRANSACTION`
+    WHERE TICKER = '{}'
+'''
+
+SECURITY_DATA_SOURCE = '''
+    SELECT
+        SRC
+    FROM 
+        `SECURITY`
+    WHERE
+        TICKER = '{}'
+'''

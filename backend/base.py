@@ -11,6 +11,7 @@ import bs4
 class BaseDBConnector:
     def __init__(self, db_path):
         self._conn = sqlite3.connect(db_path)
+        self.db_path = db_path
     
     def insert_data(self, df, table_name):
         df.to_sql(table_name, if_exists='append', con=self._conn, index=False)
@@ -78,7 +79,7 @@ class TableHandler:
         self.insert_val(data)
 
 class DataFetcher:
-    def __init__(self, db_conn):
+    def __init__(self, db_conn: BaseDBConnector):
         self.db_conn = db_conn
 
     def fetch_query(self, query):

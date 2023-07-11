@@ -25,6 +25,18 @@ def get_security_val(security):
     except:
         print(f'Failed to get value for security: {security}')
 
+def get_security_pe_bvb(security):
+    try:
+        resp = requests.get(URL.format(security))
+        soup = BeautifulSoup(resp.content, "html.parser")
+        res = soup.find_all('tr')
+        res = list(filter(lambda x: len(BeautifulSoup(str(x), 'html.parser').find_all('td', text='PER')) > 0, res))[0]
+        res = float(BeautifulSoup(str(res), 'html.parser').find('b').text.replace(',', '.'))
+        res
+        return res
+    except:
+        print(f'Failed to get value for security: {security}')
+
 class TickerFetcher(DataFetcher):
     def __init__(self, db_conn):
         super().__init__(db_conn)

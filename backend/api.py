@@ -86,6 +86,7 @@ class PortfolioStats:
 
         res_ = self.df_portfolio[['TOTAL_VALUE','TICKER', 'COUNTRY', 'FX', 'SECTOR']]
 
+
         res_ = res_.groupby(hue)['TOTAL_VALUE'].sum().reset_index()
 
         res_['TOTAL_VALUE'] = res_['TOTAL_VALUE'].apply(lambda x: np.round(x, 0))
@@ -278,13 +279,53 @@ class DivSecurity(Metric):
         return res_
 
 class PE(Metric):
-    def __init__(self, ticker) -> None:
+    def __init__(self, ticker, db_path) -> None:
         self.ticker = ticker
+        db_conn = base.BaseDBConnector(db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        self.src = fetcher.fetch_security_src(ticker)
     
     def compute(self):
         try:
-            ticker = base.yf.Ticker(self.ticker)
-            ticker_info = ticker.info
-            return ticker_info.get('forwardPE', 'N/A')
+            if self.src == 'YF':
+                ticker = base.yf.Ticker(self.ticker)
+                ticker_info = ticker.info
+                return np.round(ticker_info.get('forwardPE', 'N/A'), 2)
+            elif self.src == 'BVB':
+                return np.round(float(ticker_fetcher.get_security_pe_bvb(self.ticker)), 2)
+            else:
+                return 'N/A'
         except:
             return 'N/A'
+
+class CostBasisSecurity(Metric):
+    def __init__(self, ticker, db_path) -> None:
+        self.ticker = ticker
+        self.db_path = db_path
+
+    def compute(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        try:
+            res_ = np.round(fetcher.fetch_security_cost_basis_amt(self.ticker).values[0][0], 2)
+        except:
+            res_ = 0
+        return res_
+
+class EquityGainSecurity(Metric):
+    def __init__(self, ticker, ref_dt, db_path) -> None:
+        self.ticker = ticker
+        self.db_path = db_path
+        self.ref_dt = ref_dt
+
+    def compute(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+        try:
+            res_ = np.round(fetcher.fetch_security_equity_gain_amt(self.ticker, self.ref_dt), 2)
+        except Exception as e:
+            print('Error::', e)
+            res_ = 0
+        return res_

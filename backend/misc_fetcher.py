@@ -3,11 +3,26 @@
 # PROJECT IMPORTS
 from .base import DataFetcher
 from .sql import queries
+from .api import PortfolioStats
+from utils import utils
 
 class MiscFetcher(DataFetcher):
     
     def __init__(self, db_conn):
         super().__init__(db_conn)
+
+    def fetch_security_src(self, ticker):
+        res_ = self.fetch_query(queries.SECURITY_DATA_SOURCE.format(ticker)).values[0][0]
+        return res_
+    
+    def fetch_security_equity_gain_amt(self, ticker, ref_dt):
+        res_ = PortfolioStats(db_path=self.db_conn.db_path, ref_date=utils.date2str(utils.datetime.now()), filter_kind='TICKER', filters=ticker).get_profit()
+        print(res_)
+        return res_
+
+    def fetch_security_cost_basis_amt(self, ticker):
+        res_ = self.fetch_query(queries.SECURITY_COST_BASIS_VAL.format(ticker))
+        return res_
 
     def fetch_security_dividend_amt(self, ticker):
         res_ = self.fetch_query(queries.SECURITY_DIV_VAL.format(ticker))

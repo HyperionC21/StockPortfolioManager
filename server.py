@@ -195,6 +195,7 @@ def metric():
     metric_ = request.args.get('metric')
     period_ = request.args.get('period')
     ticker = request.args.get('ticker')
+    ref_dt = request.args.get('ref_dt', utils.date2str(datetime.now()))
 
     metric_val = 'N/A'
 
@@ -215,9 +216,13 @@ def metric():
     elif metric_ == 'annualized_profit_perc_period':
         metric_val = api.PeriodProfitPerc(DB_PATH, period_).compute()
     elif metric_ == 'PE':
-        metric_val = api.PE(ticker).compute()
+        metric_val = api.PE(ticker, DB_PATH).compute()
     elif metric_ == 'security_div_amt':
         metric_val = api.DivSecurity(ticker, DB_PATH).compute()
+    elif metric_ == 'security_cost_basis_amt':
+        metric_val = api.CostBasisSecurity(ticker, DB_PATH).compute()
+    elif metric_ == 'security_equity_gain_amt':
+        metric_val = api.EquityGainSecurity(ticker, ref_dt, DB_PATH).compute()
 
     return {
         'metric' : metric_,
