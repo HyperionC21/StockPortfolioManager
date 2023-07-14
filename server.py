@@ -223,6 +223,8 @@ def metric():
         metric_val = api.CostBasisSecurity(ticker, DB_PATH).compute()
     elif metric_ == 'security_equity_gain_amt':
         metric_val = api.EquityGainSecurity(ticker, ref_dt, DB_PATH).compute()
+    elif metric_ == 'security_equity_amt':
+        metric_val = api.EquityAmtSecurity(ticker, ref_dt, DB_PATH).compute()
 
     return {
         'metric' : metric_,

@@ -20,6 +20,10 @@ class MiscFetcher(DataFetcher):
         print(res_)
         return res_
 
+    def fetch_security_equity_amt(self, ticker, ref_dt):
+        res_ = PortfolioStats(db_path=self.db_conn.db_path, ref_date=utils.date2str(utils.datetime.now()), filter_kind='TICKER', filters=ticker).get_nav()
+        return res_
+
     def fetch_security_cost_basis_amt(self, ticker):
         res_ = self.fetch_query(queries.SECURITY_COST_BASIS_VAL.format(ticker))
         return res_

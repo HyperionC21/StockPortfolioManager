@@ -309,8 +309,9 @@ class CostBasisSecurity(Metric):
         fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
 
         try:
-            res_ = np.round(fetcher.fetch_security_cost_basis_amt(self.ticker).values[0][0], 2)
-        except:
+            res_ = np.clip(np.round(fetcher.fetch_security_cost_basis_amt(self.ticker).values[0][0], 2), a_min=0, a_max=None)
+        except Exception as e:
+            print('Error::', e)
             res_ = 0
         return res_
 
@@ -325,6 +326,23 @@ class EquityGainSecurity(Metric):
         fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
         try:
             res_ = np.round(fetcher.fetch_security_equity_gain_amt(self.ticker, self.ref_dt), 2)
+        except Exception as e:
+            print('Error::', e)
+            res_ = 0
+        return res_
+
+
+class EquityAmtSecurity(Metric):
+    def __init__(self, ticker, ref_dt, db_path) -> None:
+        self.ticker = ticker
+        self.db_path = db_path
+        self.ref_dt = ref_dt
+
+    def compute(self):
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+        try:
+            res_ = np.round(fetcher.fetch_security_equity_amt(self.ticker, self.ref_dt), 2)
         except Exception as e:
             print('Error::', e)
             res_ = 0

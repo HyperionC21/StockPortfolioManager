@@ -28,7 +28,6 @@ PORTFOLIO_COMP_QUERY = '''
                 AND DATE(t1.DATE) <= DATE('{}')
             GROUP BY
                 t1.TICKER
-            HAVING SUM(t1.AMOUNT) > 0 
         '''
 
 CURRENCY_QUERY = '''
@@ -199,7 +198,7 @@ SECURITY_COST_BASIS_VAL = '''
         `TRANSACTION`
     WHERE TICKER = '{}'
 '''
-
+    
 SECURITY_DATA_SOURCE = '''
     SELECT
         SRC
