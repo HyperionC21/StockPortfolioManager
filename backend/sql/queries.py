@@ -164,11 +164,22 @@ MISSING_TICKERS_DATA_QUERY = '''
 LAST_TRANS_TICKER = '''
     SELECT 
         TICKER,
-        DATE,
+        DATE(DATE) as DATE,
         AMOUNT as N_SHARES
     FROM `TRANSACTION`
     WHERE TICKER = '{}'
     ORDER BY DATE DESC
+    LIMIT {}
+'''
+
+FST_TRANS_TICKER = '''
+    SELECT 
+        TICKER,
+        DATE(DATE) as DATE,
+        AMOUNT as N_SHARES
+    FROM `TRANSACTION`
+    WHERE TICKER = '{}'
+    ORDER BY DATE
     LIMIT {}
 '''
 

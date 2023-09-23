@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from flask import Flask, request
+from flask_cors import CORS
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
@@ -8,6 +9,7 @@ from utils import utils
 import pandas as pd
 
 app = Flask(__name__)
+CORS(app)
 
 DB_PATH = 'core.db'
 
@@ -59,7 +61,7 @@ def performance():
     
     db_conn = base.BaseDBConnector(DB_PATH)
     misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
-    ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+    
     
     start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
     end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
@@ -69,32 +71,43 @@ def performance():
     filters = request.args.get("filters")
     filter_kind = request.args.get("filter_kind")
 
+    if filter_kind == 'TICKER':
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_ticker(filters, 1)['DATE']
+    else:
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+
     if default_interval:
         try:
             delta = get_delta_from_interval(default_interval, end_dt)
             start_dt = utils.date2str((utils.str2date(end_dt) - delta))
-            print(start_dt)
+            
         except Exception as e:
             print(e)
     
     if utils.str2date(ref_portfolio_dt) > utils.str2date(start_dt):
         start_dt = ref_portfolio_dt
-
+    print(start_dt, end_dt)
     date_range = list(utils.daterange(start_dt, end_dt, step))
 
     df_profits = pd.DataFrame()
     df_profits['date'] = list(date_range)
-    ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt).get_profit()
+    ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt, filters=filters, filter_kind=filter_kind).get_profit()
+
+    print('start dt: ', start_dt)
+    print('ref_portfolio_dt ', ref_portfolio_dt)
+    
     if kind == 'Absolute':
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind, ref_profit=ref_profit).get_profit())
     else:
         
-        ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
+        ref_cost = api.PortfolioStats(DB_PATH, filters=filters, filter_kind=filter_kind, ref_date=end_dt).get_cost()
+
+        print('ref cost: ', ref_cost)
 
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind,
          ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
-
+    
     return df_profits.to_dict()
 
 @app.route("/performance_split")
@@ -257,3 +270,4 @@ if __name__ == "__main__":
     p = multiprocessing.Process(target=fetch_data)
     p.start()
     app.run(host='0.0.0.0', port=5001, debug=True)
+    p.join()

@@ -38,8 +38,12 @@ class MiscFetcher(DataFetcher):
     def fetch_portfolio_composition(self, portfolio_id : int, ref_date : str):
         return self.fetch_query(queries.PORTFOLIO_COMP_QUERY.format(ref_date, ref_date))
 
+    def fetch_fst_trans_on_ticker(self, ticker, cnt):
+        res_ = self.fetch_query(queries.FST_TRANS_TICKER.format(ticker, cnt)).iloc[0]
+        return res_
+    
     def fetch_last_trans_on_ticker(self, ticker, cnt):
-        res_ = self.fetch_query(queries.LAST_TRANS_TICKER.format(ticker, cnt))
+        res_ = self.fetch_query(queries.F.format(ticker, cnt))
         return res_
     
     def fetch_last_div_on_ticker(self, ticker, cnt):
