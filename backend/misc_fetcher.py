@@ -51,7 +51,6 @@ class MiscFetcher(DataFetcher):
         return res_
     
     def fetch_dividend_amt(self, start_dt, end_dt):
-        res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt)).values[0][0]
-        if res_ is None:
-            return 0
+        res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt))
         return res_
+

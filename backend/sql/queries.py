@@ -65,12 +65,25 @@ FX_VAL_QUERY = '''
 
 DIVIDEND_AMT_QUERY = '''
     SELECT
-        SUM(AMOUNT * FX)  "AMT"
+        core_div.TICKER,
+        core_div.AMT,
+        sec.SECTOR,
+        sec.COUNTRY
     FROM
-        `DIVIDEND` t1
-    WHERE
-        1 = 1
-        AND DATE(t1.DATE) >= DATE('{}') AND DATE(t1.DATE) <= DATE('{}')
+    (
+        SELECT
+            t1.TICKER,
+            SUM(AMOUNT * FX)  "AMT"
+        FROM
+            `DIVIDEND` t1
+        WHERE
+            1 = 1
+            AND DATE(t1.DATE) >= DATE('{}') AND DATE(t1.DATE) <= DATE('{}')
+        GROUP BY
+            t1.TICKER
+    ) core_div
+    LEFT JOIN
+        `SECURITY` sec ON core_div.TICKER = sec.TICKER
 '''
 
 FX_MISSING_INTERVALS = '''

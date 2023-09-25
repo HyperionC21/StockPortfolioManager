@@ -206,20 +206,24 @@ def new_quote():
 @app.route("/metric", methods=['GET'])
 def metric():
     metric_ = request.args.get('metric')
-    period_ = request.args.get('period')
+    period_ = request.args.get('period', 'ALL')
     ticker = request.args.get('ticker')
+    filter_kind = request.args.get('filter_kind')
     ref_dt = request.args.get('ref_dt', utils.date2str(datetime.now()))
 
+    if ticker == 'ALL':
+        ticker = None
+        filter_kind = None
     metric_val = 'N/A'
 
     if metric_ == 'div_yield':
         metric_val = api.DivYield(DB_PATH, period_).compute()
     elif metric_ == 'div_val':
-        metric_val = api.DivVal(DB_PATH, period_).compute()
+        metric_val = api.DivVal(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'nav':
-        metric_val = api.Nav(DB_PATH, period_).compute()
+        metric_val = api.Nav(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'cost_basis':
-        metric_val = api.CostBasis(DB_PATH, period_).compute()
+        metric_val = api.CostBasis(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'profit':
         metric_val = api.Profit(DB_PATH, period_).compute()
     elif metric_ == 'fee':
