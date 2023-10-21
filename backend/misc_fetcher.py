@@ -15,6 +15,10 @@ class MiscFetcher(DataFetcher):
         res_ = self.fetch_query(queries.SECURITY_DATA_SOURCE.format(ticker)).values[0][0]
         return res_
     
+    def fetch_fst_trans_on_filter(self, filter, filter_kind):
+        res_ = self.fetch_query(queries.FST_TRANS_ON_FILTER.format(filter=filter, filter_kind=filter_kind))['DATE'][0]
+        return res_
+
     def fetch_security_equity_gain_amt(self, ticker, ref_dt):
         res_ = PortfolioStats(db_path=self.db_conn.db_path, ref_date=utils.date2str(utils.datetime.now()), filter_kind='TICKER', filters=ticker).get_profit()
         print(res_)
@@ -54,3 +58,11 @@ class MiscFetcher(DataFetcher):
         res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt))
         return res_
 
+    def fetch_activity(self, ticker):
+        if ticker == 'ALL':
+            ticker = '1 = 1'
+        else:
+            ticker = f"TICKER = '{ticker}'"
+        print(queries.ACTIVITY_QUERY.format(ticker))
+        res_ = self.fetch_query(queries.ACTIVITY_QUERY.format(ticker))
+        return res_

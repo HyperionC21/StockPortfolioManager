@@ -203,6 +203,19 @@ def new_quote():
     db_conn.insert_data(df, 'SECURITY')
     return {}
 
+@app.route("/activity", methods=['GET'])
+def activity():
+    ticker = request.args.get('ticker', 'AAPL')
+
+    db_conn = base.BaseDBConnector(DB_PATH)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+
+    df_activity = misc_fetcher_.fetch_activity(ticker)
+    df_activity.columns = list(map(lambda x: x.lower(), df_activity.columns))
+    return df_activity.to_dict()
+
+
+
 @app.route("/metric", methods=['GET'])
 def metric():
     metric_ = request.args.get('metric')
@@ -231,7 +244,7 @@ def metric():
     elif metric_ == 'annualized_profit_period':
         metric_val = api.PeriodProfitVal(DB_PATH, period_).compute()
     elif metric_ == 'annualized_profit_perc_period':
-        metric_val = api.PeriodProfitPerc(DB_PATH, period_).compute()
+        metric_val = api.PeriodProfitPerc(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'PE':
         metric_val = api.PE(ticker, DB_PATH).compute()
     elif metric_ == 'security_div_amt':

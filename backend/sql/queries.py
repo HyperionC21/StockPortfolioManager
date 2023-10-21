@@ -185,6 +185,26 @@ LAST_TRANS_TICKER = '''
     LIMIT {}
 '''
 
+FST_TRANS_ON_FILTER = '''
+    SELECT
+        DATE
+    FROM
+    (
+        SELECT 
+            trans.TICKER,
+            DATE(trans.DATE) as DATE,
+            trans.AMOUNT as N_SHARES,
+            sec.SECTOR,
+            sec.COUNTRY
+        FROM `TRANSACTION` trans
+        INNER JOIN
+            `SECURITY` sec ON trans.TICKER = sec.TICKER
+    )
+    WHERE {filter_kind} = '{filter}'
+    ORDER BY DATE
+    LIMIT 1
+'''
+
 FST_TRANS_TICKER = '''
     SELECT 
         TICKER,
@@ -230,4 +250,37 @@ SECURITY_DATA_SOURCE = '''
         `SECURITY`
     WHERE
         TICKER = '{}'
+'''
+
+ACTIVITY_QUERY = '''
+    SELECT
+	*
+FROM
+(
+	SELECT
+		TICKER,
+		strftime('%Y-%m-%d', DATE) as DATE,
+		AMOUNT,
+		PRICE,
+		ROUND((AMOUNT * PRICE + FEE) * FX) as TOTAL,
+		FX,
+		KIND
+	FROM
+		`TRANSACTION`
+	UNION
+	SELECT
+		TICKER,
+		strftime('%Y-%m-%d', DATE) as DATE,
+		0 as AMOUNT,
+		0 as PRICE,
+		ROUND(AMOUNT * FX) AS TOTAL,
+		FX,
+		"DIVIDEND" AS KIND
+	FROM
+		`DIVIDEND`
+)
+WHERE
+	{}
+ORDER BY
+	DATE(DATE) DESC
 '''
