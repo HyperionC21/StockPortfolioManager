@@ -58,11 +58,11 @@ class MiscFetcher(DataFetcher):
         res_ = self.fetch_query(queries.DIVIDEND_AMT_QUERY.format(start_dt, end_dt))
         return res_
 
-    def fetch_activity(self, ticker):
+    def fetch_activity(self, ticker, filter_kind='TICKER'):
         if ticker == 'ALL':
-            ticker = '1 = 1'
+            where_condition = '1 = 1'
         else:
-            ticker = f"TICKER = '{ticker}'"
-        print(queries.ACTIVITY_QUERY.format(ticker))
-        res_ = self.fetch_query(queries.ACTIVITY_QUERY.format(ticker))
+            where_condition = f"{filter_kind} = '{ticker}'"
+        print(queries.ACTIVITY_QUERY.format(where_condition))
+        res_ = self.fetch_query(queries.ACTIVITY_QUERY.format(where_condition))
         return res_

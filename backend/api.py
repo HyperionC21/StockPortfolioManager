@@ -22,7 +22,7 @@ class PortfolioStats:
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
         
-        if filters and filter_kind:
+        if filters and filter_kind and filters != 'ALL':
             try:
                 df_portfolio = df_portfolio[df_portfolio[filter_kind] == filters]
             except:
@@ -245,8 +245,10 @@ class Profit(Metric):
         return np.round(PortfolioStats(self.db_path, self.ref_dt, ref_profit=ref_profit).get_profit())
 
 class DivYield(Metric):
-    def __init__(self,db_path, period, ref_dt=None) -> None:
+    def __init__(self,db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('div_yield', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
     
     def _compute_amt(self):
         db_conn = base.BaseDBConnector(self.db_path)
@@ -256,21 +258,42 @@ class DivYield(Metric):
         start_dt = utils.str2date(end_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
 
-        return fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+        if self.filters != 'ALL' and self.filters is not None and self.filter_kind is not None:
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > utils.str2date(start_dt):
+                start_dt = start_dt_filter
+                start_dt = utils.date2str(start_dt)
+
+        df_divs = fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+        if self.filters is not None and self.filter_kind is not None and self.filters != 'ALL':
+            df_divs = df_divs[df_divs[self.filter_kind] == self.filters]
+        
+        return df_divs['AMT'].sum()
 
     def _compute_avg_portfolio_nav(self):
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
 
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        if self.filters != 'ALL' and self.filters is not None and self.filter_kind is not None:
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > utils.str2date(start_dt):
+                start_dt = start_dt_filter
+                start_dt = utils.date2str(start_dt)
+
         date_range = utils.daterange(start_dt, self.ref_dt, step=30)
-        navs = list(map(lambda x: PortfolioStats(self.db_path, x).get_nav(), date_range))
+        navs = list(map(lambda x: PortfolioStats(self.db_path, x, self.filters, self.filter_kind).get_nav(), date_range))
         return np.mean(navs)
 
     def compute(self):
         div_amt = self._compute_amt()
         avg_port_nav = self._compute_avg_portfolio_nav()
         print(div_amt, avg_port_nav)
-        return np.round(div_amt / (avg_port_nav + 1E-24), 4)
+        return np.round(div_amt * 100 / (avg_port_nav + 1E-24), 2)
 
 
 class DivVal(Metric):

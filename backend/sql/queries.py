@@ -253,31 +253,43 @@ SECURITY_DATA_SOURCE = '''
 '''
 
 ACTIVITY_QUERY = '''
-    SELECT
-	*
+SELECT
+	TICKER,
+    DATE,
+    AMOUNT,
+    PRICE,
+    TOTAL,
+    FX,
+    KIND
 FROM
 (
 	SELECT
-		TICKER,
-		strftime('%Y-%m-%d', DATE) as DATE,
-		AMOUNT,
-		PRICE,
-		ROUND((AMOUNT * PRICE + FEE) * FX) as TOTAL,
-		FX,
-		KIND
+		trans.TICKER,
+        sec.SECTOR,
+        sec.COUNTRY,
+		strftime('%Y-%m-%d', trans.DATE) as DATE,
+		trans.AMOUNT,
+		trans.PRICE,
+		ROUND((trans.AMOUNT * trans.PRICE + trans.FEE) * trans.FX) as TOTAL,
+		trans.FX,
+		trans.KIND
 	FROM
-		`TRANSACTION`
+		`TRANSACTION` trans
+    INNER JOIN `SECURITY` sec ON trans.TICKER = sec.TICKER
 	UNION
 	SELECT
-		TICKER,
-		strftime('%Y-%m-%d', DATE) as DATE,
+		div.TICKER,
+        sec.SECTOR,
+        sec.COUNTRY,
+		strftime('%Y-%m-%d', div.DATE) as DATE,
 		0 as AMOUNT,
 		0 as PRICE,
-		ROUND(AMOUNT * FX) AS TOTAL,
-		FX,
+		ROUND(div.AMOUNT * div.FX) AS TOTAL,
+		div.FX,
 		"DIVIDEND" AS KIND
 	FROM
-		`DIVIDEND`
+		`DIVIDEND` div
+    INNER JOIN `SECURITY` sec ON div.TICKER = sec.TICKER
 )
 WHERE
 	{}

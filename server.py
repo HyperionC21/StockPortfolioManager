@@ -206,11 +206,12 @@ def new_quote():
 @app.route("/activity", methods=['GET'])
 def activity():
     ticker = request.args.get('ticker', 'AAPL')
+    filter_kind = request.args.get('filter_kind', 'TICKER')
 
     db_conn = base.BaseDBConnector(DB_PATH)
     misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
 
-    df_activity = misc_fetcher_.fetch_activity(ticker)
+    df_activity = misc_fetcher_.fetch_activity(ticker, filter_kind)
     df_activity.columns = list(map(lambda x: x.lower(), df_activity.columns))
     return df_activity.to_dict()
 
@@ -230,7 +231,7 @@ def metric():
     metric_val = 'N/A'
 
     if metric_ == 'div_yield':
-        metric_val = api.DivYield(DB_PATH, period_).compute()
+        metric_val = api.DivYield(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'div_val':
         metric_val = api.DivVal(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'nav':
