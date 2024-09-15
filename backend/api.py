@@ -223,14 +223,18 @@ class PeriodProfitPerc(Metric):
         start_profit = PortfolioStats(self.db_path, start_dt, self.filters, self.filter_kind).get_profit()
         end_profit = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_profit()
 
+
         profit = end_profit - start_profit
         #n_days = self.period.delta.total_seconds() / ( 3600 * 24)
         n_days = (utils.str2date(self.ref_dt) - utils.str2date(start_dt)).total_seconds() / ( 3600 * 24)
 
-        annualized_profit = profit * 365 / n_days
+
+        
         ref_cost = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_cost()
 
-        return  np.round(annualized_profit * 100 / (ref_cost + 1E-24), 2)
+        annualized_profit = ((ref_cost+profit)/ref_cost)**(365 * 1.0 / n_days) - 1
+
+        return  np.round(annualized_profit * 100, 2)
 
 class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:

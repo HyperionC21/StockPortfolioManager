@@ -71,8 +71,15 @@ def performance():
     filters = request.args.get("filters")
     filter_kind = request.args.get("filter_kind")
 
+    '''
     if filter_kind == 'TICKER':
         ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_ticker(filters, 1)['DATE']
+    else:
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+    '''
+
+    if filters != 'ALL' and filters is not None and filter_kind is not None:    
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_filter(filters, filter_kind)
     else:
         ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
 
