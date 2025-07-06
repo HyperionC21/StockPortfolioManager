@@ -153,8 +153,15 @@ def composition():
 @app.route("/portfolio_stats")
 def portfolio_stats():
     ref_date = datetime.now()
-
-    ret = api.PortfolioStats(DB_PATH, ref_date).df_portfolio.to_dict()
+    stats = api.PortfolioStats(DB_PATH, ref_date)
+    stats.df_portfolio['PRICE'] = stats.df_portfolio['PRICE'].round(2)
+    stats.df_portfolio['PROFIT'] = stats.df_portfolio['PROFIT'].astype(int)
+    stats.df_portfolio['PROFIT%'] = stats.df_portfolio['PROFIT%'].round(2)
+    stats.df_portfolio['TOTAL_FEE'] = stats.df_portfolio['TOTAL_FEE'].astype(int)
+    stats.df_portfolio['TOTAL_VALUE'] = stats.df_portfolio['TOTAL_VALUE'].astype(int)
+    stats.df_portfolio['TOTAL_COST'] = stats.df_portfolio['TOTAL_COST'].astype(int)
+    stats.df_portfolio = stats.df_portfolio[stats.df_portfolio.N_SHARES > 0]
+    ret = stats.df_portfolio.to_dict()
     
     return ret
 
