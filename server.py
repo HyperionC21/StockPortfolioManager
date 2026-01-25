@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from flask import Flask, request
+from flask_cors import CORS
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
@@ -8,6 +9,7 @@ from utils import utils
 import pandas as pd
 
 app = Flask(__name__)
+CORS(app)
 
 DB_PATH = 'core.db'
 
@@ -59,7 +61,7 @@ def performance():
     
     db_conn = base.BaseDBConnector(DB_PATH)
     misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
-    ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+    
     
     start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
     end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
@@ -69,32 +71,50 @@ def performance():
     filters = request.args.get("filters")
     filter_kind = request.args.get("filter_kind")
 
+    '''
+    if filter_kind == 'TICKER':
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_ticker(filters, 1)['DATE']
+    else:
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+    '''
+
+    if filters != 'ALL' and filters is not None and filter_kind is not None:    
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_filter(filters, filter_kind)
+    else:
+        ref_portfolio_dt = misc_fetcher_.fetch_fst_trans()
+
     if default_interval:
         try:
             delta = get_delta_from_interval(default_interval, end_dt)
             start_dt = utils.date2str((utils.str2date(end_dt) - delta))
-            print(start_dt)
+            
         except Exception as e:
             print(e)
     
     if utils.str2date(ref_portfolio_dt) > utils.str2date(start_dt):
         start_dt = ref_portfolio_dt
-
+    print(start_dt, end_dt)
     date_range = list(utils.daterange(start_dt, end_dt, step))
 
     df_profits = pd.DataFrame()
     df_profits['date'] = list(date_range)
-    ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt).get_profit()
+    ref_profit = api.PortfolioStats(DB_PATH, ref_date=start_dt, filters=filters, filter_kind=filter_kind).get_profit()
+
+    print('start dt: ', start_dt)
+    print('ref_portfolio_dt ', ref_portfolio_dt)
+    
     if kind == 'Absolute':
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind, ref_profit=ref_profit).get_profit())
     else:
         
-        ref_cost = api.PortfolioStats(DB_PATH, ref_date=end_dt).get_cost()
+        ref_cost = api.PortfolioStats(DB_PATH, filters=filters, filter_kind=filter_kind, ref_date=end_dt).get_cost()
+
+        print('ref cost: ', ref_cost)
 
         df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind,
          ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
     df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
-
+    
     return df_profits.to_dict()
 
 @app.route("/performance_split")
@@ -133,8 +153,16 @@ def composition():
 @app.route("/portfolio_stats")
 def portfolio_stats():
     ref_date = datetime.now()
-
-    ret = api.PortfolioStats(DB_PATH, ref_date).df_portfolio.to_dict()
+    stats = api.PortfolioStats(DB_PATH, ref_date)
+    stats.df_portfolio['PRICE'] = stats.df_portfolio['PRICE'].round(2)
+    stats.df_portfolio['PROFIT'] = stats.df_portfolio['PROFIT'].astype(int)
+    stats.df_portfolio['PROFIT%'] = stats.df_portfolio['PROFIT%'].round(2)
+    stats.df_portfolio['TOTAL_FEE'] = stats.df_portfolio['TOTAL_FEE'].astype(int)
+    stats.df_portfolio['TOTAL_VALUE'] = stats.df_portfolio['TOTAL_VALUE'].astype(int)
+    stats.df_portfolio['TOTAL_COST'] = stats.df_portfolio['TOTAL_COST'].astype(int)
+    stats.df_portfolio['PORTFOLIO%'] = stats.df_portfolio['PORTFOLIO%'].round(2)
+    stats.df_portfolio = stats.df_portfolio[stats.df_portfolio.N_SHARES > 0]
+    ret = stats.df_portfolio.to_dict()
     
     return ret
 
@@ -190,23 +218,42 @@ def new_quote():
     db_conn.insert_data(df, 'SECURITY')
     return {}
 
+@app.route("/activity", methods=['GET'])
+def activity():
+    ticker = request.args.get('ticker', 'AAPL')
+    filter_kind = request.args.get('filter_kind', 'TICKER')
+
+    db_conn = base.BaseDBConnector(DB_PATH)
+    misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+
+    df_activity = misc_fetcher_.fetch_activity(ticker, filter_kind)
+    df_activity.columns = list(map(lambda x: x.lower(), df_activity.columns))
+    print(df_activity)
+    return df_activity.to_dict()
+
+
+
 @app.route("/metric", methods=['GET'])
 def metric():
     metric_ = request.args.get('metric')
-    period_ = request.args.get('period')
+    period_ = request.args.get('period', 'ALL')
     ticker = request.args.get('ticker')
+    filter_kind = request.args.get('filter_kind')
     ref_dt = request.args.get('ref_dt', utils.date2str(datetime.now()))
 
+    if ticker == 'ALL':
+        ticker = None
+        filter_kind = None
     metric_val = 'N/A'
 
     if metric_ == 'div_yield':
-        metric_val = api.DivYield(DB_PATH, period_).compute()
+        metric_val = api.DivYield(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'div_val':
-        metric_val = api.DivVal(DB_PATH, period_).compute()
+        metric_val = api.DivVal(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'nav':
-        metric_val = api.Nav(DB_PATH, period_).compute()
+        metric_val = api.Nav(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'cost_basis':
-        metric_val = api.CostBasis(DB_PATH, period_).compute()
+        metric_val = api.CostBasis(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'profit':
         metric_val = api.Profit(DB_PATH, period_).compute()
     elif metric_ == 'fee':
@@ -214,7 +261,7 @@ def metric():
     elif metric_ == 'annualized_profit_period':
         metric_val = api.PeriodProfitVal(DB_PATH, period_).compute()
     elif metric_ == 'annualized_profit_perc_period':
-        metric_val = api.PeriodProfitPerc(DB_PATH, period_).compute()
+        metric_val = api.PeriodProfitPerc(DB_PATH, period_, ticker, filter_kind).compute()
     elif metric_ == 'PE':
         metric_val = api.PE(ticker, DB_PATH).compute()
     elif metric_ == 'security_div_amt':
@@ -257,3 +304,4 @@ if __name__ == "__main__":
     p = multiprocessing.Process(target=fetch_data)
     p.start()
     app.run(host='0.0.0.0', port=5001, debug=True)
+    p.join()

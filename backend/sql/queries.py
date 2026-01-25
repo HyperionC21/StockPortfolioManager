@@ -7,6 +7,25 @@ FST_TICKER_TRANS_QUERY = '''
                 'TRANSACTION' t1
         '''
 
+FST_TRANS_ON_FILTER = '''
+    SELECT
+        MIN(DATE) as DATE
+    FROM
+    (
+        SELECT
+            DATE(trans.DATE) as DATE,
+            sec.*
+        FROM
+            `TRANSACTION` trans
+        INNER JOIN
+            `SECURITY` sec ON trans.TICKER = sec.TICKER
+        WHERE
+            sec.{filter_kind} = '{filter}'
+    )
+    
+'''
+
+
 PORTFOLIO_COMP_QUERY = '''
             SELECT
                 t1.TICKER,
@@ -65,12 +84,16 @@ FX_VAL_QUERY = '''
 
 DIVIDEND_AMT_QUERY = '''
     SELECT
-        SUM(AMOUNT * FX)  "AMT"
-    FROM
-        `DIVIDEND` t1
-    WHERE
-        1 = 1
-        AND DATE(t1.DATE) >= DATE('{}') AND DATE(t1.DATE) <= DATE('{}')
+	div.AMOUNT * div.FX as AMT,
+	div.DATE,
+	sec.*
+FROM
+	`DIVIDEND` div
+INNER JOIN
+	`SECURITY` sec ON div.TICKER = sec.TICKER
+WHERE
+	1 = 1
+    AND DATE(div.DATE) >= DATE('{}') AND DATE(div.DATE) <= DATE('{}')
 '''
 
 FX_MISSING_INTERVALS = '''
@@ -206,4 +229,52 @@ SECURITY_DATA_SOURCE = '''
         `SECURITY`
     WHERE
         TICKER = '{}'
+'''
+
+ACTIVITY_QUERY = '''
+SELECT
+	TICKER,
+    DATE,
+    AMOUNT,
+    PRICE,
+    TOTAL,
+    FX,
+    KIND
+FROM
+(
+	SELECT
+		trans.TICKER,
+		DATE(trans.DATE) as DATE,
+		trans.AMOUNT,
+        trans.PRICE,
+		trans.FX,
+		trans.AMOUNT * trans.PRICE * trans.FX as TOTAL,
+		trans.KIND,
+		sec.SECTOR,
+		sec.COUNTRY,
+		sec.MARKET,
+		sec.SRC
+	FROM
+		`TRANSACTION` trans
+	LEFT JOIN 
+		`SECURITY` sec ON trans.TICKER = sec.TICKER
+UNION ALL
+SELECT
+	dividend.TICKER,
+	DATE(dividend.DATE) as DATE,
+	dividend.AMOUNT,
+    0 as PRICE,
+	dividend.FX,
+	dividend.AMOUNT * dividend.FX as TOTAL,
+	'DIVIDEND' as KIND,
+	sec.SECTOR,
+	sec.COUNTRY,
+	sec.MARKET,
+	sec.SRC
+FROM
+	`DIVIDEND` dividend
+LEFT JOIN 
+	`SECURITY` sec ON dividend.TICKER = sec.TICKER
+)
+WHERE {}
 '''

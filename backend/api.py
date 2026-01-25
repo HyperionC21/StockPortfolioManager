@@ -22,8 +22,11 @@ class PortfolioStats:
 
         df_portfolio = self.misc_fetcher.fetch_portfolio_composition(1, ref_date=ref_date)
         
-        if filters and filter_kind:
-            df_portfolio = df_portfolio[df_portfolio[filter_kind] == filters]
+        if filters and filter_kind and filters != 'ALL':
+            try:
+                df_portfolio = df_portfolio[df_portfolio[filter_kind] == filters]
+            except:
+                print('filter_kind: ', filter_kind)
         prices = self.ticker_fetcher.fetch_ticker_prices(tickers = df_portfolio.TICKER, ref_date=ref_date)
         ticker_fx = self.ticker_fetcher.fetch_ticker_fx(ref_date=ref_date)
 
@@ -37,8 +40,10 @@ class PortfolioStats:
         df_portfolio['TOTAL_VALUE'] = df_portfolio['N_SHARES'] * df_portfolio['PRICE'] * df_portfolio['VALUE']
         df_portfolio['PROFIT'] = df_portfolio['TOTAL_VALUE'] - df_portfolio['TOTAL_COST']
         df_portfolio['PROFIT%'] = df_portfolio['PROFIT'] * 100 / df_portfolio['TOTAL_COST']
+        df_portfolio = df_portfolio.drop_duplicates(subset=['TICKER', 'COUNTRY'])
+        df_portfolio['PORTFOLIO%'] = df_portfolio['TOTAL_VALUE'] * 100 / df_portfolio['TOTAL_VALUE'].sum()
 
-        self.df_portfolio = df_portfolio.drop_duplicates(subset=['TICKER', 'COUNTRY'])
+        self.df_portfolio = df_portfolio
         
 
     def get_fee(self):
@@ -48,7 +53,7 @@ class PortfolioStats:
         return self.df_portfolio.TOTAL_VALUE.sum()
     
     def get_cost(self):
-        return self.df_portfolio.TOTAL_COST.sum()
+        return self.df_portfolio.TOTAL_COST.sum() + self.get_fee()
     
     def get_profit(self):
         return (self.get_nav() - self.get_cost() - self.get_fee()) - self.ref_profit
@@ -141,6 +146,7 @@ class Metric:
             misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
             portfolio_start_dt = misc_fetcher_.fetch_fst_trans()
         
+        print('portfolio_start_dt: ', portfolio_start_dt)
         self.period = Period(period, self.ref_dt, portfolio_start_dt)
 
         self.db_path = db_path
@@ -153,16 +159,20 @@ class Metric:
         raise NotImplementedError
 
 class Nav(Metric):
-    def __init__(self, db_path, period, ref_dt=None) -> None:
+    def __init__(self, db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('nav', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
     def compute(self):
-        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_nav())
+        return np.round(PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_nav())
 
 class CostBasis(Metric):
-    def __init__(self, db_path, period, ref_dt=None) -> None:
+    def __init__(self, db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('cost_basis', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
     def compute(self):
-        return np.round(PortfolioStats(self.db_path, self.ref_dt).get_cost())
+        return np.round(PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_cost())
 
 class Fee(Metric):
      def __init__(self, db_path, period, ref_dt=None) -> None:
@@ -190,23 +200,43 @@ class PeriodProfitVal(Metric):
         return annualized_profit
 
 class PeriodProfitPerc(Metric):
-    def __init__(self, db_path, period, ref_dt=None) -> None:
+    def __init__(self, db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('periodprofitperc', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
 
     def compute(self):
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
+        
+
+        if self.filters and self.filter_kind:
+            db_conn = base.BaseDBConnector(self.db_path)
+            fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > start_dt:
+                print('start_dt: ', start_dt)
+                print('start_dt_filter: ', start_dt_filter)
+                start_dt = start_dt_filter
+        
         start_dt = utils.date2str(start_dt)
 
-        start_profit = PortfolioStats(self.db_path, start_dt).get_profit()
-        end_profit = PortfolioStats(self.db_path, self.ref_dt).get_profit()
+        start_profit = PortfolioStats(self.db_path, start_dt, self.filters, self.filter_kind).get_profit()
+        end_profit = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_profit()
+
 
         profit = end_profit - start_profit
-        n_days = self.period.delta.total_seconds() / ( 3600 * 24)
+        #n_days = self.period.delta.total_seconds() / ( 3600 * 24)
+        n_days = (utils.str2date(self.ref_dt) - utils.str2date(start_dt)).total_seconds() / ( 3600 * 24)
 
-        annualized_profit = profit * 365 / n_days
-        ref_cost = PortfolioStats(self.db_path, self.ref_dt).get_cost()
 
-        return  np.round(annualized_profit * 100 / (ref_cost + 1E-24), 2)
+        
+        ref_cost = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_cost()
+
+        annualized_profit = ((ref_cost+profit)/ref_cost)**(365 * 1.0 / n_days) - 1
+
+        return  np.round(annualized_profit * 100, 2)
 
 class Profit(Metric):
     def __init__(self, db_path, period, ref_dt=None) -> None:
@@ -221,8 +251,10 @@ class Profit(Metric):
         return np.round(PortfolioStats(self.db_path, self.ref_dt, ref_profit=ref_profit).get_profit())
 
 class DivYield(Metric):
-    def __init__(self,db_path, period, ref_dt=None) -> None:
+    def __init__(self,db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('div_yield', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
     
     def _compute_amt(self):
         db_conn = base.BaseDBConnector(self.db_path)
@@ -232,27 +264,51 @@ class DivYield(Metric):
         start_dt = utils.str2date(end_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
 
-        return fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+        if self.filters != 'ALL' and self.filters is not None and self.filter_kind is not None:
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > utils.str2date(start_dt):
+                start_dt = start_dt_filter
+                start_dt = utils.date2str(start_dt)
+
+        df_divs = fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+        print(df_divs)
+        if self.filters is not None and self.filter_kind is not None and self.filters != 'ALL':
+            df_divs = df_divs[df_divs[self.filter_kind] == self.filters]
+        
+        return df_divs['AMT'].sum()
 
     def _compute_avg_portfolio_nav(self):
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
 
+        db_conn = base.BaseDBConnector(self.db_path)
+        fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+        if self.filters != 'ALL' and self.filters is not None and self.filter_kind is not None:
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > utils.str2date(start_dt):
+                start_dt = start_dt_filter
+                start_dt = utils.date2str(start_dt)
+
         date_range = utils.daterange(start_dt, self.ref_dt, step=30)
-        navs = list(map(lambda x: PortfolioStats(self.db_path, x).get_nav(), date_range))
+        navs = list(map(lambda x: PortfolioStats(self.db_path, x, self.filters, self.filter_kind).get_nav(), date_range))
         return np.mean(navs)
 
     def compute(self):
         div_amt = self._compute_amt()
         avg_port_nav = self._compute_avg_portfolio_nav()
         print(div_amt, avg_port_nav)
-        return np.round(div_amt / (avg_port_nav + 1E-24), 4)
+        return np.round(div_amt * 100 / (avg_port_nav + 1E-24), 2)
 
 
 class DivVal(Metric):
-    def __init__(self, db_path, period, ref_dt=None) -> None:
+    def __init__(self, db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('div_val', db_path, period, ref_dt)
-    
+        self.filters = filters
+        self.filter_kind = filter_kind
+
     def compute(self):
         db_conn = base.BaseDBConnector(self.db_path)
         fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
@@ -261,7 +317,12 @@ class DivVal(Metric):
         start_dt = utils.str2date(end_dt) - self.period.delta
         start_dt = utils.date2str(start_dt)
 
-        return np.round(fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt))
+        df_divs = fetcher.fetch_dividend_amt(start_dt=start_dt, end_dt=end_dt)
+        if self.filters is not None and self.filter_kind is not None:
+            df_divs = df_divs[df_divs[self.filter_kind] == self.filters]
+        
+        return df_divs['AMT'].sum()
+        
 
 class DivSecurity(Metric):
     def __init__(self, ticker, db_path) -> None:

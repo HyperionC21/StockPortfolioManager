@@ -7,6 +7,7 @@ from .base import DataFetcher
 from .fx_fetcher import FxFetcher
 from .sql import queries
 from utils import utils
+import time
 
 from bs4 import BeautifulSoup
 import requests
@@ -73,7 +74,8 @@ class TickerFetcher(DataFetcher):
         
         for _, row in df_missing_tickers.iterrows():
             src = row['SRC']
-            print(f'fetching {row["TICKER"]}')
+            time.sleep(0.1)
+            print(f'fetching {row["TICKER"]} for period {row["FETCH_START_DT"]} to {row["FETCH_END_DT"]}')
             if src == 'YF':
                 try:
                     ticker = yf.Ticker(row['TICKER'])
@@ -85,18 +87,16 @@ class TickerFetcher(DataFetcher):
                     print(e)
                     print(f'Ticker {row["TICKER"]} not found on yahoo finance')
             elif src == 'BVB':
-                price = get_security_val(row['TICKER'])
-                if price is None:
-                    continue
-                res = {
-                    'Close' : [price],
-                    'High' : [None],
-                    'Low' : [None],
-                    'Open' : [None],
-                    'Date' : [utils.date2str(utils.datetime.now())],
-                    'TICKER' : [row['TICKER']]
-                }
-                hist = pd.DataFrame(res)
+                ticker_str = row['TICKER'] + '.RO'
+                try:
+                    ticker = yf.Ticker(ticker_str)
+                    hist = ticker.history(start=row['FETCH_START_DT'], end=row['FETCH_END_DT']).reset_index()
+                    hist['TICKER'] = row['TICKER']
+                    hist = hist[hist.Date >= row['FETCH_START_DT']]
+                    hist['Date'] = hist['Date'].apply(utils.date2str)
+                except Exception as e:
+                    print(e)
+                    print(f'Ticker {row["TICKER"]} not found on yahoo finance')
             hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
             hist.columns = list(map(lambda x: x.upper(), hist.columns))	
             try:
