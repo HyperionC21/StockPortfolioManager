@@ -7,6 +7,7 @@ from flask_cors import CORS
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api, benchmarks
+from backend.benchmark_fetcher import BenchmarkFetcher
 from utils import utils
 
 import pandas as pd
@@ -27,8 +28,11 @@ def fetch_data():
         fx_fetcher_ = fx_fetcher.FxFetcher(db_conn)
         misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
 
-        ticker_fetcher_.fetch_ticker_hist(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
-        fx_fetcher_.fetch_missing_fx(misc_fetcher_.fetch_fst_trans(), utils.date2str(datetime.now()))
+        start_dt = misc_fetcher_.fetch_fst_trans()
+        end_dt = utils.date2str(datetime.now())
+        ticker_fetcher_.fetch_ticker_hist(start_dt, end_dt)
+        fx_fetcher_.fetch_missing_fx(start_dt, end_dt)
+        BenchmarkFetcher(db_conn).fetch_missing(start_dt, end_dt)
         logger.info("Background data fetch completed successfully")
     except Exception as e:
         logger.error(f"Background data fetch failed: {e}")
