@@ -3,7 +3,7 @@ from flask import Flask, request
 from flask_cors import CORS
 
 import multiprocessing
-from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
+from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api, benchmarks
 from utils import utils
 
 import pandas as pd
@@ -299,6 +299,141 @@ def last_dividend():
     res_ = misc_fetcher_.fetch_last_div_on_ticker(ticker, cnt).to_dict()
     print(res_)
     return res_
+
+## ── Benchmarks & Advanced Metrics Endpoints ──────────────────────────────────
+
+@app.route("/benchmark", methods=['GET'])
+def benchmark():
+    """Compare portfolio performance against a benchmark index."""
+    benchmark_ticker = request.args.get('benchmark', 'SPY')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    step = int(request.args.get('step', 7))
+    filters = request.args.get('filters')
+    filter_kind = request.args.get('filter_kind')
+
+    pb = benchmarks.PortfolioBenchmark(
+        DB_PATH, start_date, end_date, step, filters, filter_kind
+    )
+    return pb.compare_performance(benchmark_ticker)
+
+
+@app.route("/benchmark_multi", methods=['GET'])
+def benchmark_multi():
+    """Compare portfolio against multiple benchmarks."""
+    bench_list = request.args.get('benchmarks', 'SPY,QQQ,AGG')
+    bench_tickers = [b.strip() for b in bench_list.split(',')]
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    step = int(request.args.get('step', 7))
+
+    pb = benchmarks.PortfolioBenchmark(DB_PATH, start_date, end_date, step)
+    return {'comparisons': pb.multi_benchmark_comparison(bench_tickers)}
+
+
+@app.route("/risk_metrics", methods=['GET'])
+def risk_metrics():
+    """Compute all risk metrics (Sharpe, Sortino, Vol, Drawdown, Beta, Alpha)."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    step = int(request.args.get('step', 7))
+    benchmark_ticker = request.args.get('benchmark', 'SPY')
+    risk_free = float(request.args.get('risk_free_rate', benchmarks.DEFAULT_RISK_FREE_RATE))
+    filters = request.args.get('filters')
+    filter_kind = request.args.get('filter_kind')
+
+    rm = benchmarks.RiskMetrics(
+        DB_PATH, start_date, end_date, step, risk_free, filters, filter_kind
+    )
+    return rm.compute_all(benchmark_ticker)
+
+
+@app.route("/diversification", methods=['GET'])
+def diversification():
+    """Portfolio diversification analysis (HHI, concentration)."""
+    ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+    hue = request.args.get('hue', 'TICKER')
+    filters = request.args.get('filters')
+    filter_kind = request.args.get('filter_kind')
+
+    da = benchmarks.DiversificationAnalytics(DB_PATH, ref_date, filters, filter_kind)
+
+    return {
+        'herfindahl': da.herfindahl_index(hue),
+        'top_5_concentration': da.concentration_top_n(5, hue),
+        'all_dimensions': da.diversification_by_dimension(),
+    }
+
+
+@app.route("/correlation", methods=['GET'])
+def correlation():
+    """Pairwise ticker correlation matrix."""
+    ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+    period_days = int(request.args.get('period_days', 365))
+    step = int(request.args.get('step', 7))
+
+    da = benchmarks.DiversificationAnalytics(DB_PATH, ref_date)
+    return da.correlation_matrix(period_days, step)
+
+
+@app.route("/dividends_analysis", methods=['GET'])
+def dividends_analysis():
+    """Comprehensive dividend analytics."""
+    div_analytics = benchmarks.DividendAnalytics(DB_PATH)
+    return {
+        'annual_summary': div_analytics.annual_dividend_summary(),
+        'by_ticker': div_analytics.dividend_by_ticker(),
+        'yield_on_cost': div_analytics.dividend_yield_vs_cost(),
+    }
+
+
+@app.route("/rebalance", methods=['GET'])
+def rebalance():
+    """Get rebalancing suggestions (equal weight)."""
+    ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+    hue = request.args.get('hue', 'TICKER')
+    tolerance = float(request.args.get('tolerance', 2.0))
+
+    rb = benchmarks.RebalancingSuggestions(DB_PATH, ref_date)
+    return rb.equal_weight_rebalance(hue, tolerance)
+
+
+@app.route("/rebalance_custom", methods=['POST'])
+def rebalance_custom():
+    """Get rebalancing suggestions for custom target allocations."""
+    data = request.json
+    targets = data.get('targets', {})
+    hue = data.get('hue', 'TICKER')
+    tolerance = float(data.get('tolerance', 2.0))
+    ref_date = data.get('ref_date', utils.date2str(datetime.now()))
+
+    rb = benchmarks.RebalancingSuggestions(DB_PATH, ref_date)
+    return rb.custom_target_rebalance(targets, hue, tolerance)
+
+
+@app.route("/health_score", methods=['GET'])
+def health_score():
+    """Portfolio health score (0-100) with grade and breakdown."""
+    ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+    period = request.args.get('period', '1Y')
+
+    hs = benchmarks.PortfolioHealthScore(DB_PATH, period, ref_date)
+    return hs.compute()
+
+
+@app.route("/insights", methods=['GET'])
+def insights():
+    """Actionable investment insights and advice."""
+    ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+    ii = benchmarks.InvestmentInsights(DB_PATH, ref_date)
+    return {'insights': ii.generate_insights()}
+
+
+@app.route("/available_benchmarks", methods=['GET'])
+def available_benchmarks():
+    """List available benchmark indices for comparison."""
+    return {'benchmarks': [{'ticker': k, 'name': v} for k, v in benchmarks.BENCHMARKS.items()]}
+
 
 if __name__ == "__main__":
     p = multiprocessing.Process(target=fetch_data)
