@@ -14,10 +14,10 @@ def daterange(start_date : str, end_date : str, step : int=1):
     
     for n in range(0, int((end_dt - start_dt).days), step):
         dt = start_dt + timedelta(n)
-        if dt == end_date:
+        if dt == end_dt:
             seen_end_dt = True
         yield dt
     
     if not seen_end_dt:
-        yield end_date
+        yield end_dt
     
