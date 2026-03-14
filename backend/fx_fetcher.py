@@ -28,7 +28,7 @@ class FxFetcher(DataFetcher):
             }, inplace=True)
             curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
 
-            self.db_conn.insert_data(curr_hist, 'FX')
+            self.db_conn.insert_data(curr_hist, 'FX', ignore_conflicts=True)
 
     def fetch_fx_val(self, ref_date):
         return self.fetch_query(queries.FX_VAL_QUERY.format(ref_date))
@@ -54,6 +54,6 @@ class FxFetcher(DataFetcher):
             curr_hist['CURRENCY_CD'] = row['CURRENCY_CD']
             curr_hist['DATE'] = curr_hist['DATE'].apply(utils.date2str)
             try:
-                self.db_conn.insert_data(curr_hist, 'FX')
-            except:
-                print('Failed to insert: ', curr_hist, ' in FX')
+                self.db_conn.insert_data(curr_hist, 'FX', ignore_conflicts=True)
+            except Exception as e:
+                print('Failed to insert FX data:', e)

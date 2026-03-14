@@ -100,7 +100,7 @@ class TickerFetcher(DataFetcher):
             hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
             hist.columns = list(map(lambda x: x.upper(), hist.columns))	
             try:
-                self.db_conn.insert_data(hist, 'SECURITY_VALUES')
+                self.db_conn.insert_data(hist, 'SECURITY_VALUES', ignore_conflicts=True)
             except Exception as e:
                 print(e)
                 print('Failed to insert security history for {} on {}'.format(hist['TICKER'].iloc[0], hist['DATE'].iloc[0]))

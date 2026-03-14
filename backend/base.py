@@ -10,12 +10,21 @@ import bs4
 
 class BaseDBConnector:
     def __init__(self, db_path):
-        self._conn = sqlite3.connect(db_path)
+        self._conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
         self.db_path = db_path
     
-    def insert_data(self, df, table_name):
-        df.to_sql(table_name, if_exists='append', con=self._conn, index=False)
+    def insert_data(self, df, table_name, ignore_conflicts=False):
+        if ignore_conflicts:
+            cols = ', '.join(df.columns)
+            placeholders = ', '.join(['?'] * len(df.columns))
+            sql = f"INSERT OR IGNORE INTO {table_name} ({cols}) VALUES ({placeholders})"
+            self._conn.executemany(sql, df.itertuples(index=False, name=None))
+        else:
+            df.to_sql(table_name, if_exists='append', con=self._conn, index=False)
         self._conn.commit()
+        self._conn.execute("PRAGMA wal_checkpoint(FULL)")
     
     def check_table(self, table_name):
         query = f'''

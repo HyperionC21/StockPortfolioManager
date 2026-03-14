@@ -5,13 +5,28 @@ import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api, benchmarks
 from backend.benchmark_fetcher import BenchmarkFetcher
 from utils import utils
 
 import pandas as pd
 import numpy as np
+import math
+
+def _sanitize(obj):
+    """Recursively replace NaN/Inf with None so jsonify produces valid JSON."""
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, (np.floating, np.integer)):
+        v = obj.item()
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
+        return v
+    return obj
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
@@ -477,11 +492,12 @@ def correlation():
 def dividends_analysis():
     """Comprehensive dividend analytics."""
     div_analytics = benchmarks.DividendAnalytics(DB_PATH)
-    return {
+    result = {
         'annual_summary': div_analytics.annual_dividend_summary(),
         'by_ticker': div_analytics.dividend_by_ticker(),
         'yield_on_cost': div_analytics.dividend_yield_vs_cost(),
     }
+    return jsonify(_sanitize(result))
 
 
 @app.route("/rebalance", methods=['GET'])
@@ -533,8 +549,4 @@ def available_benchmarks():
 
 
 if __name__ == "__main__":
-    debug_mode = os.getenv('FLASK_ENV', 'production') == 'development'
-    p = multiprocessing.Process(target=fetch_data)
-    p.start()
     app.run(host='0.0.0.0', port=5001, debug=True)
-    p.join()
