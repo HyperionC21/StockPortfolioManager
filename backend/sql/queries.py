@@ -84,13 +84,11 @@ FX_VAL_QUERY = '''
 
 DIVIDEND_AMT_QUERY = '''
     SELECT
+	div.TICKER,
 	div.AMOUNT * div.FX as AMT,
-	div.DATE,
-	sec.*
+	div.DATE
 FROM
 	`DIVIDEND` div
-INNER JOIN
-	`SECURITY` sec ON div.TICKER = sec.TICKER
 WHERE
 	1 = 1
     AND DATE(div.DATE) >= DATE('{}') AND DATE(div.DATE) <= DATE('{}')

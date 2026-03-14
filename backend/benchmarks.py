@@ -551,7 +551,11 @@ class DividendAnalytics:
         if df_divs.empty:
             return []
 
-        by_ticker = df_divs.groupby('TICKER')['AMT'].sum().reset_index()
+        df_divs = df_divs.dropna(subset=['TICKER'])
+        if df_divs.empty:
+            return []
+
+        by_ticker = df_divs.groupby('TICKER', dropna=True)['AMT'].sum().reset_index()
         by_ticker.columns = ['ticker', 'total_dividends']
         by_ticker = by_ticker.sort_values('total_dividends', ascending=False)
         by_ticker['total_dividends'] = by_ticker['total_dividends'].round(2)

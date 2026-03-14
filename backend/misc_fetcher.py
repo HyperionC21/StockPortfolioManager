@@ -47,7 +47,7 @@ class MiscFetcher(DataFetcher):
         return res_
     
     def fetch_last_trans_on_ticker(self, ticker, cnt):
-        res_ = self.fetch_query(queries.F.format(ticker, cnt))
+        res_ = self.fetch_query(queries.LAST_TRANS_TICKER.format(ticker, cnt))
         return res_
     
     def fetch_last_div_on_ticker(self, ticker, cnt):
