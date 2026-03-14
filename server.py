@@ -7,11 +7,12 @@ from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api
 from utils import utils
 
 import pandas as pd
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH = 'core.db'
+DB_PATH = os.getenv('DB_PATH', 'core.db')
 
 def fetch_data():
     db_conn = base.BaseDBConnector(DB_PATH)
@@ -301,7 +302,8 @@ def last_dividend():
     return res_
 
 if __name__ == "__main__":
+    debug_mode = os.getenv('FLASK_ENV', 'production') == 'development'
     p = multiprocessing.Process(target=fetch_data)
     p.start()
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
     p.join()
