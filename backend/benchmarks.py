@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from . import base, misc_fetcher, ticker_fetcher, fx_fetcher
 from .api import PortfolioStats
+from .benchmark_fetcher import get_benchmark_prices_from_db
 from utils import utils
 
 # Annualized risk-free rate (approximate 10Y government bond yield)
@@ -69,15 +70,21 @@ class PortfolioBenchmark:
         return df
 
     def _get_benchmark_prices(self, benchmark_ticker):
-        """Fetch benchmark prices from Yahoo Finance for the date range."""
+        """Return benchmark close prices, preferring the local DB cache."""
+        df = get_benchmark_prices_from_db(
+            self.db_conn, benchmark_ticker, self.start_date, self.end_date
+        )
+        if not df.empty:
+            return df
+        # Fall back to live Yahoo Finance if DB has no data
         try:
             ticker = base.yf.Ticker(benchmark_ticker)
-            df = ticker.history(start=self.start_date, end=self.end_date)
-            if df.empty:
+            hist = ticker.history(start=self.start_date, end=self.end_date)
+            if hist.empty:
                 return pd.DataFrame()
-            df = df[['Close']].rename(columns={'Close': 'price'})
-            df.index = df.index.tz_localize(None)
-            return df
+            hist = hist[['Close']].rename(columns={'Close': 'price'})
+            hist.index = hist.index.tz_localize(None)
+            return hist
         except Exception:
             return pd.DataFrame()
 
@@ -287,12 +294,18 @@ class RiskMetrics:
             return None
 
         try:
-            bench = base.yf.Ticker(benchmark_ticker)
-            bench_df = bench.history(start=self.start_date, end=self.end_date)
+            bench_df = get_benchmark_prices_from_db(
+                self.db_conn, benchmark_ticker, self.start_date, self.end_date
+            )
             if bench_df.empty:
-                return None
-            bench_df.index = bench_df.index.tz_localize(None)
-            bench_returns = bench_df['Close'].resample(f'{self.step}D').last().pct_change().dropna()
+                # Fall back to live YF
+                bench = base.yf.Ticker(benchmark_ticker)
+                raw = bench.history(start=self.start_date, end=self.end_date)
+                if raw.empty:
+                    return None
+                raw.index = raw.index.tz_localize(None)
+                bench_df = raw[['Close']].rename(columns={'Close': 'price'})
+            bench_returns = bench_df['price'].resample(f'{self.step}D').last().pct_change().dropna()
         except Exception:
             return None
 
@@ -327,10 +340,17 @@ class RiskMetrics:
             return None
 
         try:
-            bench = base.yf.Ticker(benchmark_ticker)
-            bench_df = bench.history(start=self.start_date, end=self.end_date)
-            bench_df.index = bench_df.index.tz_localize(None)
-            bench_returns = bench_df['Close'].pct_change().dropna()
+            bench_df = get_benchmark_prices_from_db(
+                self.db_conn, benchmark_ticker, self.start_date, self.end_date
+            )
+            if bench_df.empty:
+                bench = base.yf.Ticker(benchmark_ticker)
+                raw = bench.history(start=self.start_date, end=self.end_date)
+                if raw.empty:
+                    return None
+                raw.index = raw.index.tz_localize(None)
+                bench_df = raw[['Close']].rename(columns={'Close': 'price'})
+            bench_returns = bench_df['price'].pct_change().dropna()
         except Exception:
             return None
 
