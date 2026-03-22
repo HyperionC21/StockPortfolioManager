@@ -997,3 +997,137 @@ class InvestmentInsights:
             })
 
         return insights
+
+
+class BETTracker:
+    """Compare user's Romanian stock holdings against BET index top-10 composition."""
+
+    BET_URL = 'https://m.bvb.ro/financialinstruments/indices/indicesprofiles'
+    TOP_N = 10
+
+    # Fallback composition — refreshed 2026-03-20
+    _FALLBACK = [
+        {'ticker': 'TLV',  'name': 'Banca Transilvania',    'weight': 20.11},
+        {'ticker': 'SNP',  'name': 'OMV Petrom',            'weight': 16.23},
+        {'ticker': 'SNG',  'name': 'Romgaz',                'weight': 11.95},
+        {'ticker': 'H2O',  'name': 'Hidroelectrica',        'weight': 11.56},
+        {'ticker': 'TGN',  'name': 'Transgaz',              'weight':  7.47},
+        {'ticker': 'BRD',  'name': 'BRD Groupe SG',         'weight':  6.97},
+        {'ticker': 'DIGI', 'name': 'Digi Communications',   'weight':  4.86},
+        {'ticker': 'EL',   'name': 'Electrica',             'weight':  4.35},
+        {'ticker': 'M',    'name': 'MedLife',               'weight':  3.55},
+        {'ticker': 'SNN',  'name': 'Nuclearelectrica',      'weight':  3.48},
+    ]
+
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.db_conn = base.BaseDBConnector(db_path)
+
+    def _fetch_bet_composition(self):
+        """Scrape BET top-10 from BVB mobile website; fall back to hardcoded list."""
+        import requests
+        from bs4 import BeautifulSoup
+        import re
+
+        try:
+            resp = requests.get(self.BET_URL, timeout=10)
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            composition = []
+
+            for table in soup.find_all('table'):
+                rows_data = []
+                for row in table.find_all('tr')[1:]:
+                    cols = row.find_all('td')
+                    if len(cols) < 2:
+                        continue
+                    ticker_text = cols[0].get_text(strip=True)
+                    if not re.match(r'^[A-Z0-9]{1,6}$', ticker_text):
+                        continue
+                    try:
+                        weight_text = (
+                            cols[-1].get_text(strip=True)
+                            .replace(',', '.').replace('%', '').strip()
+                        )
+                        weight = float(weight_text)
+                        if 0 < weight < 50:
+                            rows_data.append({'ticker': ticker_text, 'weight': weight})
+                    except ValueError:
+                        continue
+
+                if len(rows_data) >= 5:
+                    composition = rows_data
+                    break
+
+            if not composition:
+                print('BETTracker: scraping returned no data, using fallback')
+                return [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+
+            composition.sort(key=lambda x: x['weight'], reverse=True)
+            return composition[:self.TOP_N]
+
+        except Exception as e:
+            print(f'BETTracker: scraping failed ({e}), using fallback')
+            return [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+
+    def get_tracking(self, ref_date=None):
+        """Return BET top-10 vs user's Romanian holdings divergence."""
+        if ref_date is None:
+            ref_date = utils.date2str(datetime.now())
+
+        bet_raw = self._fetch_bet_composition()
+
+        # Normalise weights within the top-N slice so they sum to 100 %
+        total_bet_w = sum(c['weight'] for c in bet_raw)
+        bet_top10 = [
+            {'ticker': c['ticker'], 'bet_weight': round(c['weight'] * 100 / total_bet_w, 2)}
+            for c in bet_raw
+        ]
+
+        try:
+            ps = PortfolioStats(self.db_path, ref_date)
+            df = ps.df_portfolio.copy()
+        except Exception as e:
+            return {'error': f'Failed to load portfolio: {e}'}
+
+        bvb_df = self.db_conn.read_query("SELECT TICKER FROM SECURITY WHERE SRC = 'BVB'")
+        bvb_set = set(bvb_df['TICKER'].tolist()) if not bvb_df.empty else set()
+
+        df_ro = df[df['TICKER'].isin(bvb_set)].copy()
+        total_ro_nav = df_ro['TOTAL_VALUE'].sum()
+
+        if total_ro_nav > 0:
+            df_ro['USER_WEIGHT'] = df_ro['TOTAL_VALUE'] * 100 / total_ro_nav
+        else:
+            df_ro['USER_WEIGHT'] = 0.0
+
+        user_w = df_ro.set_index('TICKER')['USER_WEIGHT'].to_dict()
+
+        fallback_names = {c['ticker']: c['name'] for c in self._FALLBACK}
+        rows = []
+        for item in bet_top10:
+            t = item['ticker']
+            bet_w = item['bet_weight']
+            user_w_val = round(user_w.get(t, 0.0), 2)
+            rows.append({
+                'ticker': t,
+                'name': fallback_names.get(t, t),
+                'bet_weight': bet_w,
+                'user_weight': user_w_val,
+                'divergence': round(user_w_val - bet_w, 2),
+                'held': t in user_w and user_w[t] > 0,
+            })
+
+        missing = [r['ticker'] for r in rows if not r['held']]
+        extra = [t for t in user_w if t not in {r['ticker'] for r in rows}]
+
+        divergences = [r['divergence'] for r in rows]
+        tracking_error = round(float(np.sqrt(np.mean([d ** 2 for d in divergences]))), 2)
+
+        return {
+            'composition': rows,
+            'missing_from_top10': missing,
+            'extra_holdings': extra,
+            'tracking_error': tracking_error,
+            'total_romanian_nav': round(float(total_ro_nav), 2),
+            'ref_date': ref_date,
+        }
