@@ -548,18 +548,6 @@ def available_benchmarks():
     return {'benchmarks': [{'ticker': k, 'name': v} for k, v in benchmarks.BENCHMARKS.items()]}
 
 
-@app.route("/bet_tracking", methods=['GET'])
-def bet_tracking():
-    """BET index top-10 vs user's Romanian holdings — weights and divergence."""
-    try:
-        ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
-        tracker = benchmarks.BETTracker(DB_PATH)
-        return jsonify(tracker.get_tracking(ref_date))
-    except Exception as e:
-        logger.error(f"BET tracking error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
 if __name__ == "__main__":
     debug_mode = os.getenv('FLASK_ENV', 'production') == 'development'
     p = multiprocessing.Process(target=fetch_data)
