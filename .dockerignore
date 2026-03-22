@@ -1,0 +1,24 @@
+# Never bake the live database into the image.
+# core.db is bind-mounted at runtime via docker-compose volumes.
+core.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Dev / test artefacts
+test.ipynb
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+
+# Editor / OS
+.env
+.venv
+.git
+.gitignore
+*.code-workspace
