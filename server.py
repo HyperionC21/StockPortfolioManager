@@ -403,11 +403,19 @@ def last_dividend():
 def benchmark():
     """Compare portfolio performance against a benchmark index."""
     benchmark_ticker = request.args.get('benchmark', 'SPY')
+    end_date = request.args.get('end_date', utils.date2str(datetime.now()))
     start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
     step = int(request.args.get('step', 7))
     filters = request.args.get('filters')
     filter_kind = request.args.get('filter_kind')
+    default_interval = request.args.get('default_interval')
+
+    if default_interval:
+        try:
+            delta = get_delta_from_interval(default_interval, end_date)
+            start_date = utils.date2str(utils.str2date(end_date) - delta)
+        except Exception:
+            pass
 
     pb = benchmarks.PortfolioBenchmark(
         DB_PATH, start_date, end_date, step, filters, filter_kind
@@ -431,13 +439,21 @@ def benchmark_multi():
 @app.route("/risk_metrics", methods=['GET'])
 def risk_metrics():
     """Compute all risk metrics (Sharpe, Sortino, Vol, Drawdown, Beta, Alpha)."""
+    end_date = request.args.get('end_date', utils.date2str(datetime.now()))
     start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
     step = int(request.args.get('step', 7))
     benchmark_ticker = request.args.get('benchmark', 'SPY')
     risk_free = float(request.args.get('risk_free_rate', benchmarks.DEFAULT_RISK_FREE_RATE))
     filters = request.args.get('filters')
     filter_kind = request.args.get('filter_kind')
+    default_interval = request.args.get('default_interval')
+
+    if default_interval:
+        try:
+            delta = get_delta_from_interval(default_interval, end_date)
+            start_date = utils.date2str(utils.str2date(end_date) - delta)
+        except Exception:
+            pass
 
     rm = benchmarks.RiskMetrics(
         DB_PATH, start_date, end_date, step, risk_free, filters, filter_kind

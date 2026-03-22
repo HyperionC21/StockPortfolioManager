@@ -45,6 +45,7 @@ class FxFetcher(DataFetcher):
                 print('Error on: ')
                 print(row)
                 print('============')
+                continue
             curr_hist.columns = list(map(lambda x: x.upper(), curr_hist.columns))	
 
             curr_hist = curr_hist[['CLOSE', 'DATE']]
