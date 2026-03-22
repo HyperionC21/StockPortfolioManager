@@ -86,6 +86,7 @@ class TickerFetcher(DataFetcher):
                 except Exception as e:
                     print(e)
                     print(f'Ticker {row["TICKER"]} not found on yahoo finance')
+                    continue
             elif src == 'BVB':
                 ticker_str = row['TICKER'] + '.RO'
                 try:
@@ -97,6 +98,7 @@ class TickerFetcher(DataFetcher):
                 except Exception as e:
                     print(e)
                     print(f'Ticker {row["TICKER"]} not found on yahoo finance')
+                    continue
             hist = hist[['TICKER', 'Date', 'Open', 'High', 'Low', 'Close']]
             hist.columns = list(map(lambda x: x.upper(), hist.columns))	
             try:
