@@ -261,6 +261,7 @@ Securities use a `SRC` field to indicate their data source:
 3. Run `test.ipynb` cells to verify behavior (no automated test suite)
 4. Commit with descriptive messages
 5. Push with: `git push -u origin <branch-name>`
+6. Update the CLAUDE.md file to reflect the new changes
 
 ### No Automated Testing
 The only testing is via `test.ipynb`. When making changes:
