@@ -1004,6 +1004,11 @@ class BETTracker:
 
     BET_URL = 'https://m.bvb.ro/financialinstruments/indices/indicesprofiles'
     TOP_N = 10
+    _CACHE_TTL = 3600  # re-scrape BVB at most once per hour
+
+    # Module-level cache so repeated requests don't block Flask
+    _composition_cache = None
+    _cache_timestamp = 0.0
 
     # Fallback composition — refreshed 2026-03-20
     _FALLBACK = [
@@ -1024,10 +1029,19 @@ class BETTracker:
         self.db_conn = base.BaseDBConnector(db_path)
 
     def _fetch_bet_composition(self):
-        """Scrape BET top-10 from BVB mobile website; fall back to hardcoded list."""
+        """Scrape BET top-10 from BVB mobile website; fall back to hardcoded list.
+
+        Result is cached for _CACHE_TTL seconds so the blocking HTTP request to
+        BVB does not starve other Flask endpoints on repeated calls.
+        """
+        import time
         import requests
         from bs4 import BeautifulSoup
         import re
+
+        now = time.time()
+        if BETTracker._composition_cache and (now - BETTracker._cache_timestamp) < BETTracker._CACHE_TTL:
+            return BETTracker._composition_cache
 
         try:
             resp = requests.get(self.BET_URL, timeout=10)
@@ -1060,14 +1074,23 @@ class BETTracker:
 
             if not composition:
                 print('BETTracker: scraping returned no data, using fallback')
-                return [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+                result = [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+                BETTracker._composition_cache = result
+                BETTracker._cache_timestamp = now
+                return result
 
             composition.sort(key=lambda x: x['weight'], reverse=True)
-            return composition[:self.TOP_N]
+            result = composition[:self.TOP_N]
+            BETTracker._composition_cache = result
+            BETTracker._cache_timestamp = now
+            return result
 
         except Exception as e:
             print(f'BETTracker: scraping failed ({e}), using fallback')
-            return [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+            result = [{'ticker': c['ticker'], 'weight': c['weight']} for c in self._FALLBACK]
+            BETTracker._composition_cache = result
+            BETTracker._cache_timestamp = now
+            return result
 
     def get_tracking(self, ref_date=None):
         """Return BET top-10 vs user's Romanian holdings divergence."""
