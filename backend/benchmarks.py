@@ -50,24 +50,34 @@ class PortfolioBenchmark:
         self.filters = filters
         self.filter_kind = filter_kind
 
-    def _get_portfolio_nav_series(self):
-        """Build a time series of portfolio NAV values."""
+    def _get_portfolio_series(self):
+        """Build a time series of portfolio profit and cost values."""
         date_range = list(utils.daterange(self.start_date, self.end_date, self.step))
-        navs = []
+        rows = []
         for dt in date_range:
             dt_str = utils.date2str(dt) if isinstance(dt, datetime) else dt
             try:
                 ps = PortfolioStats(self.db_path, dt_str,
                                     self.filters, self.filter_kind)
-                navs.append({'date': dt_str, 'nav': ps.get_nav()})
+                rows.append({
+                    'date': dt_str,
+                    'nav': ps.get_nav(),
+                    'profit': ps.get_profit(),
+                    'cost': ps.get_cost(),
+                })
             except Exception:
                 continue
 
-        df = pd.DataFrame(navs)
+        df = pd.DataFrame(rows)
         if len(df) > 0:
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date').sort_index()
         return df
+
+    def _get_portfolio_nav_series(self):
+        """Build a time series of portfolio NAV values."""
+        df = self._get_portfolio_series()
+        return df[['nav']] if not df.empty else df
 
     def _get_benchmark_prices(self, benchmark_ticker):
         """Return benchmark close prices, preferring the local DB cache."""
@@ -90,45 +100,63 @@ class PortfolioBenchmark:
 
     def compare_performance(self, benchmark_ticker='SPY'):
         """
-        Compare portfolio cumulative return vs a benchmark.
+        Compare portfolio vs benchmark using a PeriodProfitPerc-style approach.
 
-        Returns dict with:
-        - dates: list of date strings
-        - portfolio_return: cumulative return % series
-        - benchmark_return: cumulative return % series
-        - portfolio_total_return: final cumulative return %
-        - benchmark_total_return: final cumulative return %
-        - outperformance: portfolio minus benchmark (alpha estimate)
+        Portfolio return at each date T:
+            (profit(T) - profit(start)) / cost(T)
+        This mirrors PeriodProfitPerc: the profit *change* (pure market gain, cancels
+        out new capital additions) expressed as % of the current cost basis.
+
+        Benchmark return at each date T:
+            bench_price(T) / bench_price(start) - 1
+        Simple cumulative return from the same start date.
+
+        Both series start at 0% and grow together without being distorted by
+        new capital deployed into the portfolio over time.
         """
-        nav_df = self._get_portfolio_nav_series()
+        port_df = self._get_portfolio_series()
         bench_df = self._get_benchmark_prices(benchmark_ticker)
 
-        if nav_df.empty or bench_df.empty:
+        if port_df.empty or bench_df.empty:
             return {'error': 'Insufficient data for comparison'}
 
-        # Align dates
-        nav_df = nav_df.resample('W-FRI').last().dropna()
+        # Align to weekly grid
+        port_df = port_df.resample('W-FRI').last().dropna()
         bench_df = bench_df.resample('W-FRI').last().dropna()
 
-        common_idx = nav_df.index.intersection(bench_df.index)
+        common_idx = port_df.index.intersection(bench_df.index)
         if len(common_idx) < 2:
             return {'error': 'Not enough overlapping dates'}
 
-        nav_aligned = nav_df.loc[common_idx]
+        port_aligned = port_df.loc[common_idx]
         bench_aligned = bench_df.loc[common_idx]
 
-        port_ret = (nav_aligned['nav'] / nav_aligned['nav'].iloc[0] - 1) * 100
-        bench_ret = (bench_aligned['price'] / bench_aligned['price'].iloc[0] - 1) * 100
+        # Reference values at the start of the series
+        start_profit = float(port_aligned['profit'].iloc[0])
+        bench_start_price = float(bench_aligned['price'].iloc[0])
+
+        # Portfolio: profit improvement over cost (PeriodProfitPerc-style, non-annualized)
+        port_returns = (
+            (port_aligned['profit'] - start_profit) / port_aligned['cost'] * 100
+        ).round(2).tolist()
+
+        # Benchmark: simple cumulative % from the same start date
+        bench_returns = (
+            (bench_aligned['price'] / bench_start_price - 1) * 100
+        ).round(2).tolist()
+
+        final_port = port_returns[-1]
+        final_bench = bench_returns[-1]
 
         return {
             'benchmark': benchmark_ticker,
             'benchmark_name': BENCHMARKS.get(benchmark_ticker, benchmark_ticker),
             'dates': [d.strftime('%Y-%m-%d') for d in common_idx],
-            'portfolio_return': port_ret.round(2).tolist(),
-            'benchmark_return': bench_ret.round(2).tolist(),
-            'portfolio_total_return': round(float(port_ret.iloc[-1]), 2),
-            'benchmark_total_return': round(float(bench_ret.iloc[-1]), 2),
-            'outperformance': round(float(port_ret.iloc[-1] - bench_ret.iloc[-1]), 2),
+            'portfolio_return': port_returns,
+            'benchmark_return': bench_returns,
+            'portfolio_total_return': round(final_port, 2),
+            'benchmark_total_return': round(final_bench, 2),
+            'outperformance': round(final_port - final_bench, 2),
         }
 
     def multi_benchmark_comparison(self, benchmarks=None):
