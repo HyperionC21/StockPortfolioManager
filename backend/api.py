@@ -182,18 +182,30 @@ class Fee(Metric):
         return np.round(PortfolioStats(self.db_path, self.ref_dt).get_fee()) 
 
 class PeriodProfitVal(Metric):
-    def __init__(self, db_path, period, ref_dt=None) -> None:
+    def __init__(self, db_path, period, filters=None, filter_kind=None, ref_dt=None) -> None:
         super().__init__('periodprofitval', db_path, period, ref_dt)
+        self.filters = filters
+        self.filter_kind = filter_kind
 
     def compute(self):
         start_dt = utils.str2date(self.ref_dt) - self.period.delta
+
+        if self.filters and self.filter_kind:
+            db_conn = base.BaseDBConnector(self.db_path)
+            fetcher = misc_fetcher.MiscFetcher(db_conn=db_conn)
+
+            start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
+            start_dt_filter = utils.str2date(start_dt_filter)
+            if start_dt_filter > start_dt:
+                start_dt = start_dt_filter
+
         start_dt = utils.date2str(start_dt)
 
-        start_profit = PortfolioStats(self.db_path, start_dt).get_profit()
-        end_profit = PortfolioStats(self.db_path, self.ref_dt).get_profit()
+        start_profit = PortfolioStats(self.db_path, start_dt, self.filters, self.filter_kind).get_profit()
+        end_profit = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_profit()
 
         profit = end_profit - start_profit
-        n_days = self.period.delta.total_seconds() / ( 3600 * 24)
+        n_days = (utils.str2date(self.ref_dt) - utils.str2date(start_dt)).total_seconds() / (3600 * 24)
 
         annualized_profit = profit * 365 / n_days
 
