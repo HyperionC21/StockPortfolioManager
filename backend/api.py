@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import imp
 import pandas as pd
 import numpy as np
 from . import fx_fetcher, misc_fetcher, ticker_fetcher, base
@@ -206,6 +205,8 @@ class PeriodProfitVal(Metric):
 
         profit = end_profit - start_profit
         n_days = (utils.str2date(self.ref_dt) - utils.str2date(start_dt)).total_seconds() / (3600 * 24)
+        if n_days <= 0:
+            return 0.0
 
         annualized_profit = profit * 365 / n_days
 
@@ -228,8 +229,6 @@ class PeriodProfitPerc(Metric):
             start_dt_filter = fetcher.fetch_fst_trans_on_filter(self.filters, self.filter_kind)
             start_dt_filter = utils.str2date(start_dt_filter)
             if start_dt_filter > start_dt:
-                print('start_dt: ', start_dt)
-                print('start_dt_filter: ', start_dt_filter)
                 start_dt = start_dt_filter
         
         start_dt = utils.date2str(start_dt)
@@ -241,12 +240,20 @@ class PeriodProfitPerc(Metric):
         profit = end_profit - start_profit
         #n_days = self.period.delta.total_seconds() / ( 3600 * 24)
         n_days = (utils.str2date(self.ref_dt) - utils.str2date(start_dt)).total_seconds() / ( 3600 * 24)
+        if n_days <= 0:
+            return 0.0
 
 
         
         ref_cost = PortfolioStats(self.db_path, self.ref_dt, self.filters, self.filter_kind).get_cost()
+        if ref_cost <= 0:
+            return 0.0
 
-        annualized_profit = ((ref_cost+profit)/ref_cost)**(365 * 1.0 / n_days) - 1
+        growth_factor = (ref_cost + profit) / ref_cost
+        if growth_factor <= 0:
+            return 0.0
+
+        annualized_profit = growth_factor**(365 * 1.0 / n_days) - 1
 
         return  np.round(annualized_profit * 100, 2)
 
