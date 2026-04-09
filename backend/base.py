@@ -37,8 +37,8 @@ class BaseDBConnector:
 
         return pd.read_sql(query, self._conn)
     
-    def read_query(self, query):
-        return pd.read_sql(query, self._conn)
+    def read_query(self, query, params=None):
+        return pd.read_sql(query, self._conn, params=params)
 
 class TableHandler:
     def __init__(self, db_connector, table_name, pk) -> None:
@@ -82,5 +82,5 @@ class DataFetcher:
     def __init__(self, db_conn: BaseDBConnector):
         self.db_conn = db_conn
 
-    def fetch_query(self, query):
-        return  self.db_conn.read_query(query)
+    def fetch_query(self, query, params=None):
+        return self.db_conn.read_query(query, params=params)
