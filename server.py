@@ -343,7 +343,7 @@ def metric():
         elif metric_ == 'fee':
             metric_val = api.Fee(DB_PATH, period_).compute()
         elif metric_ == 'annualized_profit_period':
-            metric_val = api.PeriodProfitVal(DB_PATH, period_).compute()
+            metric_val = api.PeriodProfitVal(DB_PATH, period_, ticker, filter_kind).compute()
         elif metric_ == 'annualized_profit_perc_period':
             metric_val = api.PeriodProfitPerc(DB_PATH, period_, ticker, filter_kind).compute()
         elif metric_ == 'PE':
