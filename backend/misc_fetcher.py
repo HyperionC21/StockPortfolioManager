@@ -67,3 +67,46 @@ class MiscFetcher(DataFetcher):
         print(queries.ACTIVITY_QUERY.format(where_condition))
         res_ = self.fetch_query(queries.ACTIVITY_QUERY.format(where_condition))
         return res_
+
+    def fetch_security_universe(self):
+        query = '''
+            SELECT
+                TICKER,
+                COUNTRY,
+                SECTOR,
+                FX,
+                MARKET,
+                SRC
+            FROM
+                `SECURITY`
+        '''
+        return self.fetch_query(query)
+
+    def fetch_available_filters(self, ref_date=None, active_only=True):
+        if active_only:
+            if ref_date is None:
+                ref_date = utils.date2str(utils.datetime.now())
+            df_universe = self.fetch_portfolio_composition(1, ref_date=ref_date)
+            if 'N_SHARES' in df_universe.columns:
+                df_universe = df_universe[df_universe['N_SHARES'] > 0]
+        else:
+            df_universe = self.fetch_security_universe()
+
+        filter_kinds = ['TICKER', 'COUNTRY', 'SECTOR', 'FX', 'MARKET', 'SRC']
+        filters = {}
+        counts = {}
+
+        for kind in filter_kinds:
+            if kind in df_universe.columns:
+                vals = sorted([x for x in df_universe[kind].dropna().unique().tolist() if str(x) != ''])
+            else:
+                vals = []
+            filters[kind] = vals
+            counts[kind] = len(vals)
+
+        return {
+            'as_of': ref_date,
+            'active_only': active_only,
+            'filters': filters,
+            'counts': counts,
+        }
