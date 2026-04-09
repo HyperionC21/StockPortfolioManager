@@ -316,6 +316,21 @@ def activity():
         logger.error(f"Activity error: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/available_filters', methods=['GET'])
+def available_filters():
+    """List available filter values for TICKER/COUNTRY/SECTOR/FX/MARKET/SRC."""
+    try:
+        ref_date = request.args.get('ref_date', utils.date2str(datetime.now()))
+        active_only = request.args.get('active_only', 'true').lower() in ('1', 'true', 'yes')
+
+        db_conn = base.BaseDBConnector(DB_PATH)
+        misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+        return misc_fetcher_.fetch_available_filters(ref_date=ref_date, active_only=active_only)
+    except Exception as e:
+        logger.error(f"Available filters error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/metric", methods=['GET'])
 def metric():
     try:
