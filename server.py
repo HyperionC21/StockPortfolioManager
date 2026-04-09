@@ -429,10 +429,39 @@ def benchmark_multi():
     bench_list = request.args.get('benchmarks', 'SPY,QQQ,AGG')
     bench_tickers = [b.strip() for b in bench_list.split(',')]
     start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    end_date = request.args.get('end_date', utils.date2str(datetime.now()))
     step = int(request.args.get('step', 7))
+    filters = request.args.get('filters')
+    filter_kind = request.args.get('filter_kind')
+    default_interval = request.args.get('default_interval')
+    include_series = request.args.get('include_series', 'false').lower() in ('1', 'true', 'yes')
 
-    pb = benchmarks.PortfolioBenchmark(DB_PATH, start_date, end_date, step)
+    if default_interval:
+        try:
+            delta = get_delta_from_interval(default_interval, end_date)
+            start_date = utils.date2str(utils.str2date(end_date) - delta)
+        except Exception:
+            pass
+
+    pb = benchmarks.PortfolioBenchmark(DB_PATH, start_date, end_date, step, filters, filter_kind)
+
+    if include_series:
+        series = {}
+        comparisons = []
+        for bench in bench_tickers:
+            comp = pb.compare_performance(bench)
+            if 'error' in comp:
+                continue
+            series[bench] = comp
+            comparisons.append({
+                'benchmark': bench,
+                'name': benchmarks.BENCHMARKS.get(bench, bench),
+                'benchmark_return': comp['benchmark_total_return'],
+                'portfolio_return': comp['portfolio_total_return'],
+                'outperformance': comp['outperformance'],
+            })
+        return {'comparisons': comparisons, 'series': series}
+
     return {'comparisons': pb.multi_benchmark_comparison(bench_tickers)}
 
 
