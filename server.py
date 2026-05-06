@@ -7,6 +7,7 @@ from flask_cors import CORS
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api, benchmarks
+from backend.inflation_fetcher import InflationFetcher
 from backend.benchmark_fetcher import BenchmarkFetcher
 from utils import utils
 
@@ -33,6 +34,7 @@ def fetch_data():
         ticker_fetcher_.fetch_ticker_hist(start_dt, end_dt)
         fx_fetcher_.fetch_missing_fx(start_dt, end_dt)
         BenchmarkFetcher(db_conn).fetch_missing(start_dt, end_dt)
+        InflationFetcher(db_conn).fetch_and_store(end_dt)
         logger.info("Background data fetch completed successfully")
     except Exception as e:
         logger.error(f"Background data fetch failed: {e}")
@@ -139,6 +141,7 @@ def performance():
     try:
         db_conn = base.BaseDBConnector(DB_PATH)
         misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+        inflation_fetcher_ = InflationFetcher(db_conn)
 
         start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
         end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
@@ -147,6 +150,7 @@ def performance():
         kind = request.args.get("kind", 'Absolute')
         filters = request.args.get("filters")
         filter_kind = request.args.get("filter_kind")
+        inflation_adjusted = request.args.get('inflation_adjusted', 'false').lower() in ('1', 'true', 'yes')
 
         if filters != 'ALL' and filters is not None and filter_kind is not None:
             ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_filter(filters, filter_kind)
@@ -175,6 +179,39 @@ def performance():
             ref_cost = api.PortfolioStats(DB_PATH, filters=filters, filter_kind=filter_kind, ref_date=end_dt).get_cost()
             df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind,
              ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
+
+        if inflation_adjusted and len(df_profits) > 0:
+            try:
+                inflation_fetcher_.fetch_and_store(end_dt)
+                cpi_df = inflation_fetcher_.get_series(start_dt, end_dt)
+
+                if not cpi_df.empty:
+                    cpi_df['DATE'] = pd.to_datetime(cpi_df['DATE'])
+                    cpi_df = cpi_df[['DATE', 'CPI100']].sort_values('DATE').drop_duplicates(subset=['DATE'])
+
+                    chart_df = pd.DataFrame({'date': pd.to_datetime(df_profits['date'])}).sort_values('date')
+                    cpi_aligned = pd.merge_asof(
+                        chart_df,
+                        cpi_df.rename(columns={'DATE': 'date'}),
+                        on='date',
+                        direction='backward'
+                    )
+
+                    cpi_aligned['CPI100'] = cpi_aligned['CPI100'].ffill().bfill()
+                    start_cpi = cpi_aligned['CPI100'].iloc[0] if len(cpi_aligned) > 0 else None
+
+                    if start_cpi and start_cpi > 0:
+                        inflation_factor = cpi_aligned['CPI100'] / start_cpi
+
+                        if kind == 'Absolute':
+                            df_profits['profit'] = (df_profits['profit'] / inflation_factor.values)
+                        else:
+                            nominal_growth = 1.0 + (df_profits['profit'] / 100.0)
+                            real_growth = nominal_growth / inflation_factor.values
+                            df_profits['profit'] = (real_growth - 1.0) * 100.0
+            except Exception as e:
+                logger.warning(f"Inflation adjustment failed, returning nominal series: {e}")
+
         df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
         return df_profits.to_dict()
@@ -429,10 +466,39 @@ def benchmark_multi():
     bench_list = request.args.get('benchmarks', 'SPY,QQQ,AGG')
     bench_tickers = [b.strip() for b in bench_list.split(',')]
     start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    end_date = request.args.get('end_date', utils.date2str(datetime.now()))
     step = int(request.args.get('step', 7))
+    filters = request.args.get('filters')
+    filter_kind = request.args.get('filter_kind')
+    default_interval = request.args.get('default_interval')
+    include_series = request.args.get('include_series', 'false').lower() in ('1', 'true', 'yes')
 
-    pb = benchmarks.PortfolioBenchmark(DB_PATH, start_date, end_date, step)
+    if default_interval:
+        try:
+            delta = get_delta_from_interval(default_interval, end_date)
+            start_date = utils.date2str(utils.str2date(end_date) - delta)
+        except Exception:
+            pass
+
+    pb = benchmarks.PortfolioBenchmark(DB_PATH, start_date, end_date, step, filters, filter_kind)
+
+    if include_series:
+        series = {}
+        comparisons = []
+        for bench in bench_tickers:
+            comp = pb.compare_performance(bench)
+            if 'error' in comp:
+                continue
+            series[bench] = comp
+            comparisons.append({
+                'benchmark': bench,
+                'name': benchmarks.BENCHMARKS.get(bench, bench),
+                'benchmark_return': comp['benchmark_total_return'],
+                'portfolio_return': comp['portfolio_total_return'],
+                'outperformance': comp['outperformance'],
+            })
+        return {'comparisons': comparisons, 'series': series}
+
     return {'comparisons': pb.multi_benchmark_comparison(bench_tickers)}
 
 
@@ -546,6 +612,28 @@ def insights():
 def available_benchmarks():
     """List available benchmark indices for comparison."""
     return {'benchmarks': [{'ticker': k, 'name': v} for k, v in benchmarks.BENCHMARKS.items()]}
+
+
+@app.route("/inflation", methods=['GET'])
+def inflation():
+    """Romania CPI series, with CPI100 rebased to oldest portfolio transaction date."""
+    try:
+        db_conn = base.BaseDBConnector(DB_PATH)
+        misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+
+        start_date = request.args.get('start_date', misc_fetcher_.fetch_fst_trans())
+        end_date = request.args.get('end_date', utils.date2str(datetime.now()))
+        refresh = request.args.get('refresh', 'false').lower() in ('1', 'true', 'yes')
+
+        inflation_fetcher = InflationFetcher(db_conn)
+        if refresh:
+            inflation_fetcher.fetch_and_store(end_date)
+        df = inflation_fetcher.get_series(start_date, end_date)
+        df.columns = [c.lower() for c in df.columns]
+        return df.to_dict(orient='list')
+    except Exception as e:
+        logger.error(f"Inflation endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/bet_tracking", methods=['GET'])
