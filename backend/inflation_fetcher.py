@@ -6,7 +6,6 @@ Normalization rule:
 """
 
 from datetime import datetime
-from io import StringIO
 from typing import Optional
 
 import pandas as pd
@@ -14,8 +13,7 @@ import requests
 
 from . import base
 
-ROMANIA_CPI_SERIES = 'ROUCPIALLMINMEI'
-FRED_CSV_URL = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}'
+WORLD_BANK_CPI_URL = 'https://api.worldbank.org/v2/country/ROU/indicator/FP.CPI.TOTL?format=json&per_page=20000'
 
 _CREATE_TABLE_SQL = '''
     CREATE TABLE IF NOT EXISTS ROMANIA_CPI (
@@ -46,23 +44,29 @@ class InflationFetcher:
             return None
 
     def _fetch_romania_cpi(self):
-        url = FRED_CSV_URL.format(series_id=ROMANIA_CPI_SERIES)
-        resp = requests.get(url, timeout=30)
+        resp = requests.get(WORLD_BANK_CPI_URL, timeout=30)
         resp.raise_for_status()
 
-        df = pd.read_csv(StringIO(resp.text))
-        # Expected columns: DATE, ROUCPIALLMINMEI
-        if 'DATE' not in df.columns or ROMANIA_CPI_SERIES not in df.columns:
+        payload = resp.json()
+        if not isinstance(payload, list) or len(payload) < 2:
             return pd.DataFrame(columns=['DATE', 'CPI'])
 
-        df = df[['DATE', ROMANIA_CPI_SERIES]].copy()
-        df.rename(columns={ROMANIA_CPI_SERIES: 'CPI'}, inplace=True)
+        obs = payload[1]
+        if not isinstance(obs, list):
+            return pd.DataFrame(columns=['DATE', 'CPI'])
 
-        df['DATE'] = pd.to_datetime(df['DATE'], errors='coerce')
+        df = pd.DataFrame(obs)
+        if 'date' not in df.columns or 'value' not in df.columns:
+            return pd.DataFrame(columns=['DATE', 'CPI'])
+
+        # World Bank CPI is annual; represent each value at year-end so it can be aligned on chart dates.
+        df = df[['date', 'value']].copy()
+        df.rename(columns={'date': 'YEAR', 'value': 'CPI'}, inplace=True)
+        df['DATE'] = pd.to_datetime(df['YEAR'].astype(str) + '-12-31', errors='coerce')
         df['CPI'] = pd.to_numeric(df['CPI'], errors='coerce')
         df = df.dropna(subset=['DATE', 'CPI'])
         df = df.sort_values('DATE').reset_index(drop=True)
-        return df
+        return df[['DATE', 'CPI']]
 
     def fetch_and_store(self, end_date: Optional[str] = None):
         base_date = self._oldest_transaction_date()

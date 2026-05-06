@@ -141,6 +141,7 @@ def performance():
     try:
         db_conn = base.BaseDBConnector(DB_PATH)
         misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+        inflation_fetcher_ = InflationFetcher(db_conn)
 
         start_dt = request.args.get("start_date", misc_fetcher_.fetch_fst_trans())
         end_dt = request.args.get("end_date", utils.date2str(datetime.now()))
@@ -149,6 +150,7 @@ def performance():
         kind = request.args.get("kind", 'Absolute')
         filters = request.args.get("filters")
         filter_kind = request.args.get("filter_kind")
+        inflation_adjusted = request.args.get('inflation_adjusted', 'false').lower() in ('1', 'true', 'yes')
 
         if filters != 'ALL' and filters is not None and filter_kind is not None:
             ref_portfolio_dt = misc_fetcher_.fetch_fst_trans_on_filter(filters, filter_kind)
@@ -177,6 +179,39 @@ def performance():
             ref_cost = api.PortfolioStats(DB_PATH, filters=filters, filter_kind=filter_kind, ref_date=end_dt).get_cost()
             df_profits['profit'] = df_profits.date.apply(lambda x: api.PortfolioStats(DB_PATH, x, filters=filters, filter_kind=filter_kind,
              ref_profit=ref_profit, ref_cost=ref_cost).get_profit_perc())
+
+        if inflation_adjusted and len(df_profits) > 0:
+            try:
+                inflation_fetcher_.fetch_and_store(end_dt)
+                cpi_df = inflation_fetcher_.get_series(start_dt, end_dt)
+
+                if not cpi_df.empty:
+                    cpi_df['DATE'] = pd.to_datetime(cpi_df['DATE'])
+                    cpi_df = cpi_df[['DATE', 'CPI100']].sort_values('DATE').drop_duplicates(subset=['DATE'])
+
+                    chart_df = pd.DataFrame({'date': pd.to_datetime(df_profits['date'])}).sort_values('date')
+                    cpi_aligned = pd.merge_asof(
+                        chart_df,
+                        cpi_df.rename(columns={'DATE': 'date'}),
+                        on='date',
+                        direction='backward'
+                    )
+
+                    cpi_aligned['CPI100'] = cpi_aligned['CPI100'].ffill().bfill()
+                    start_cpi = cpi_aligned['CPI100'].iloc[0] if len(cpi_aligned) > 0 else None
+
+                    if start_cpi and start_cpi > 0:
+                        inflation_factor = cpi_aligned['CPI100'] / start_cpi
+
+                        if kind == 'Absolute':
+                            df_profits['profit'] = (df_profits['profit'] / inflation_factor.values)
+                        else:
+                            nominal_growth = 1.0 + (df_profits['profit'] / 100.0)
+                            real_growth = nominal_growth / inflation_factor.values
+                            df_profits['profit'] = (real_growth - 1.0) * 100.0
+            except Exception as e:
+                logger.warning(f"Inflation adjustment failed, returning nominal series: {e}")
+
         df_profits['date'] = df_profits['date'].apply(lambda x: utils.date2str(x))
 
         return df_profits.to_dict()
