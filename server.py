@@ -7,6 +7,7 @@ from flask_cors import CORS
 
 import multiprocessing
 from backend import fx_fetcher, misc_fetcher, ticker_fetcher, base, api, benchmarks
+from backend.inflation_fetcher import InflationFetcher
 from backend.benchmark_fetcher import BenchmarkFetcher
 from utils import utils
 
@@ -33,6 +34,7 @@ def fetch_data():
         ticker_fetcher_.fetch_ticker_hist(start_dt, end_dt)
         fx_fetcher_.fetch_missing_fx(start_dt, end_dt)
         BenchmarkFetcher(db_conn).fetch_missing(start_dt, end_dt)
+        InflationFetcher(db_conn).fetch_and_store(end_dt)
         logger.info("Background data fetch completed successfully")
     except Exception as e:
         logger.error(f"Background data fetch failed: {e}")
@@ -575,6 +577,28 @@ def insights():
 def available_benchmarks():
     """List available benchmark indices for comparison."""
     return {'benchmarks': [{'ticker': k, 'name': v} for k, v in benchmarks.BENCHMARKS.items()]}
+
+
+@app.route("/inflation", methods=['GET'])
+def inflation():
+    """Romania CPI series, with CPI100 rebased to oldest portfolio transaction date."""
+    try:
+        db_conn = base.BaseDBConnector(DB_PATH)
+        misc_fetcher_ = misc_fetcher.MiscFetcher(db_conn)
+
+        start_date = request.args.get('start_date', misc_fetcher_.fetch_fst_trans())
+        end_date = request.args.get('end_date', utils.date2str(datetime.now()))
+        refresh = request.args.get('refresh', 'false').lower() in ('1', 'true', 'yes')
+
+        inflation_fetcher = InflationFetcher(db_conn)
+        if refresh:
+            inflation_fetcher.fetch_and_store(end_date)
+        df = inflation_fetcher.get_series(start_date, end_date)
+        df.columns = [c.lower() for c in df.columns]
+        return df.to_dict(orient='list')
+    except Exception as e:
+        logger.error(f"Inflation endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/bet_tracking", methods=['GET'])
